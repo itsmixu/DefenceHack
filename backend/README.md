@@ -3,9 +3,31 @@
 Python service that fetches open-source geospatial data and exposes it as
 GeoJSON over HTTP for the frontend map.
 
-This folder is intentionally **empty for now**. The backend owner (and
-their AI agent) will scaffold the service from scratch. Pick whatever
-Python framework and libraries make sense.
+## Stack
+
+- Python 3.11+
+- FastAPI + Uvicorn
+- Pydantic v2 for response models
+- `python-dotenv` for env loading, `httpx` for async upstream calls
+- GeoPandas / pyproj added per-provider when reprojection from EPSG:3067 is needed
+
+## Run
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # fill in keys as providers come online
+uvicorn app.main:app --reload --port 8000
+```
+
+Smoke test:
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/api/sources
+curl "http://localhost:8000/api/layers/osm?bbox=24.5,60.1,25.3,60.4"
+```
 
 ## Before you start
 
