@@ -81,22 +81,23 @@ Neither side may reach into the other's folder without coordinating. The
 
 ### Backend (`backend/`)
 
-- **Language**: Python (3.11+ assumed).
-- **Everything else is the backend owner's choice** and will be filled in
-  here by their agent once they scaffold the service. Likely candidates
-  (not binding): FastAPI or Flask for the HTTP layer; GeoPandas / Shapely /
-  pyproj for geo work; httpx or requests for upstream calls;
-  `fmiopendata` for FMI.
-- **Hard requirements regardless of stack choice**:
-  - Must expose the HTTP API documented in §6 (GeoJSON in EPSG:4326).
-  - Must read API keys from environment variables, never hard-coded.
-  - Must cache upstream responses to disk under `data/cache/` so the demo
-    is resilient to flaky networks.
-  - Must not require a database for v1 (files on disk are fine).
-
-> Backend agent: when you lock in the stack, replace this subsection with
-> the concrete choices (framework, libraries, run command, port) so the
-> frontend agent knows what it's talking to.
+- **Language**: Python 3.11+.
+- **Framework**: FastAPI + Uvicorn (ASGI).
+- **Models**: Pydantic v2 for response schemas.
+- **HTTP client**: `httpx` (async) for upstream provider calls.
+- **Geo libs** (added per-provider as needed): GeoPandas, Shapely, pyproj for
+  reprojecting Finnish authority data from EPSG:3067 → EPSG:4326. `fmiopendata`
+  for FMI.
+- **Config**: `python-dotenv` loads `backend/.env`. `.env.example` is committed.
+- **Run command**: `uvicorn app.main:app --reload --port 8000` (from `backend/`).
+- **Port**: `8000`. The frontend Vite dev server proxies `/api` here.
+- **Layout**: `backend/app/{main.py, routers/, providers/, schemas.py, bbox.py,
+  registry.py, cache.py, geo.py}`. Providers added incrementally per §7.
+- **Hard requirements**:
+  - GeoJSON `FeatureCollection` in EPSG:4326 on every layer endpoint.
+  - API keys from env vars only — never hard-coded.
+  - Upstream responses cached under `data/cache/` for demo resilience.
+  - No database in v1; files on disk only.
 
 ### Shared
 
