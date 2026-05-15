@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .providers.base import Provider
+from .providers.digiroad import DigiroadProvider
 from .providers.fmi import FMIProvider
 from .providers.osm import OSMProvider
 from .providers.statfin import StatFinProvider
@@ -36,6 +37,7 @@ PROVIDERS: dict[str, Provider] = {
     "osm": OSMProvider(),
     "fmi": FMIProvider(),
     "statfin": StatFinProvider(),
+    "digiroad": DigiroadProvider(),
 }
 
 
