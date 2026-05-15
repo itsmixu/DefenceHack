@@ -1,0 +1,42 @@
+# --- secrets ---
+.env
+.env.*
+!.env.example
+
+# --- data (see data/README.md) ---
+data/cache/
+data/raw/
+data/**/*.geojson
+data/**/*.gpkg
+data/**/*.shp
+data/**/*.shx
+data/**/*.dbf
+data/**/*.prj
+data/**/*.tif
+data/**/*.tiff
+data/**/*.csv
+data/**/*.parquet
+data/**/*.zip
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- node / vite ---
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+
+# --- editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

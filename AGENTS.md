@@ -1,0 +1,328 @@
+# AGENTS.md — DefenceHack / 61N IPB Tool
+
+> **Read this file first.** It is the single source of truth for any AI coding
+> agent (Cascade, Claude Code, Cursor, Copilot, etc.) or human contributor
+> working on this repository. If you change architecture, update this file in
+> the same commit.
+
+---
+
+## 1. Project context
+
+This repository is our entry for the **Junction Defence Hackathon — 61N
+Challenge**: *Automate intelligence preparation of the battlefield (IPB)
+using open-source data*.
+
+The deliverable is a **web tool** that, given a geographic area and timeframe,
+automatically retrieves, processes and visualises operationally relevant
+open-source data (terrain, weather, infrastructure, demographics, satellite
+overpasses, etc.) so a planning team can rapidly understand an operational
+environment.
+
+The full challenge brief lives in `challenge.md` at the repo root. Re-read it
+before making any non-trivial design decision.
+
+### Target areas (exemplary, not exclusive)
+
+1. Archipelago Sea (Saaristomeri)
+2. North Karelia (Pohjois-Karjala)
+3. Käsivarren Lappi (Lapland)
+
+The solution **must generalise to any area in the world**. The UI must also
+**transparently indicate which data sources were available and which were
+not** for a given area — this is an explicit judging criterion.
+
+### What the user sees
+
+- A full-screen **interactive 2D map** of the chosen Area of Interest (AOI).
+- A **layer panel** to toggle data layers (roads, bridges, cell towers,
+  population, weather, etc.).
+- **Drawing tools** to sketch routes, danger zones, range rings, markers and
+  arbitrary polygons on top of the map.
+- A **side dashboard** with statistics, weather summaries, satellite overpass
+  schedules, and a list of which sources succeeded / failed.
+- A **time/date picker** for the timeframe (relevant for weather, satellite
+  passes, historical statistics).
+
+---
+
+## 2. Team & ownership split
+
+Two contributors, two computers, two AI agents. Strict separation of concerns,
+joined only by a **GeoJSON-over-HTTP contract**.
+
+| Area | Owner | Stack |
+|---|---|---|
+| **Backend** — data fetching, processing, GeoJSON API | Teammate | Python 3.11+, FastAPI, GeoPandas |
+| **Frontend** — interactive map, drawing, dashboard | Miko | TypeScript, React, Vite, Leaflet |
+
+Neither side may reach into the other's folder without coordinating. The
+**only** integration point is the HTTP API documented in §6.
+
+---
+
+## 3. Tech stack (locked-in choices)
+
+### Frontend (`frontend/`)
+
+- **Build / framework**: Vite + React 18 + TypeScript.
+- **Map library**: **Leaflet** via **react-leaflet**.
+  - Chosen over MapLibre/OpenLayers for hackathon velocity. Drawing,
+    clustering, heatmaps and WMTS basemaps are all one-line plugins.
+- **Drawing**: `@geoman-io/leaflet-geoman-free` (polygons, polylines,
+  markers, circles, edit/delete, snapping).
+- **Clustering**: `leaflet.markercluster` (cell towers, POIs).
+- **Heatmaps**: `leaflet.heat` (population density fallback).
+- **Styling / UI**: Tailwind CSS + shadcn/ui for the dashboard side panel and
+  controls. Lucide for icons.
+- **State**: React local state + Zustand if/when global layer state grows.
+  Do not add Redux.
+- **HTTP**: native `fetch` or `ky`. Do not add Axios.
+
+### Backend (`backend/`)
+
+- **Framework**: **FastAPI** + Uvicorn (async, automatic OpenAPI docs at
+  `/docs`).
+- **Geo**: GeoPandas, Shapely, pyproj, rasterio (only if elevation work).
+- **HTTP client**: httpx (async).
+- **FMI helper**: `fmiopendata` (wraps the FMI WFS).
+- **Validation**: Pydantic v2.
+- **Caching**: simple on-disk cache in `data/cache/` keyed by
+  `(source, bbox, t)`. No Redis for now.
+- **No database** unless we hit a wall. GeoPackage / Parquet on disk is fine.
+
+### Shared
+
+- **Data interchange**: **GeoJSON `FeatureCollection`** in **EPSG:4326**
+  (WGS84, lon/lat). Any other CRS is a bug.
+- **Time**: ISO 8601, UTC, with `Z` suffix.
+- **Bounding boxes**: `minLon,minLat,maxLon,maxLat` as a single comma-separated
+  query string parameter named `bbox`.
+
+---
+
+## 4. Repository layout
+
+```
+DefenceHack/
+├── AGENTS.md                  # ← you are here
+├── challenge.md               # original challenge brief from 61N
+├── README.md                  # human-facing readme (run/build instructions)
+│
+├── backend/                   # Python service (teammate)
+│   ├── README.md
+│   ├── pyproject.toml         # or requirements.txt
+│   ├── app/
+│   │   ├── main.py            # FastAPI entrypoint, CORS, routes
+│   │   ├── config.py          # env var loading (API keys)
+│   │   ├── models.py          # Pydantic schemas
+│   │   ├── geo.py             # CRS / bbox helpers
+│   │   ├── cache.py           # on-disk cache helpers
+│   │   └── sources/           # one module per data provider
+│   │       ├── __init__.py
+│   │       ├── mml.py         # National Land Survey of Finland
+│   │       ├── fmi.py         # Finnish Meteorological Institute
+│   │       ├── statfin.py     # Statistics Finland (PxWeb + Paavo)
+│   │       ├── digiroad.py    # Digiroad / Väylä roads & bridges
+│   │       ├── opencellid.py  # OpenCelliD cell towers
+│   │       ├── n2yo.py        # satellite overpasses
+│   │       └── osm.py         # OpenStreetMap Overpass (generalisability)
+│   └── tests/
+│
+├── frontend/                  # React app (Miko)
+│   ├── README.md
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── index.html
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── api/               # typed clients for backend endpoints
+│       ├── map/
+│       │   ├── MapView.tsx    # main Leaflet container
+│       │   ├── basemaps.ts    # OSM, MML WMTS configs
+│       │   └── layers/        # one component per layer type
+│       ├── drawing/           # geoman setup, drawn-features store
+│       ├── dashboard/         # side panel, stats widgets
+│       └── lib/               # shared utils (bbox, geojson helpers)
+│
+└── data/                      # gitignored cached / downloaded data
+    ├── README.md
+    ├── cache/                 # backend response cache
+    └── raw/                   # one-off downloads (Digiroad GeoPackage, etc.)
+```
+
+`data/cache/` and `data/raw/` are **gitignored**. Never commit downloaded
+datasets, API keys, or generated GeoJSON.
+
+---
+
+## 5. Conventions
+
+### CRS handling (read this twice)
+
+- Many Finnish datasets ship in **EPSG:3067** (ETRS-TM35FIN). MML elevation
+  rasters too.
+- The web map is **EPSG:4326** (or technically 3857 for tiles, but Leaflet
+  hides this).
+- **Reproject in the backend, never in the frontend.** Every endpoint returns
+  EPSG:4326 GeoJSON. Period.
+- Helper: `backend/app/geo.py` exposes `to_wgs84(gdf)` and `bbox_to_polygon`.
+
+### API endpoint shape
+
+```
+GET /api/layers/<source>?bbox=<minLon,minLat,maxLon,maxLat>&t=<ISO8601>
+```
+
+- Always returns `application/geo+json` with a `FeatureCollection`.
+- Each `Feature.properties` includes a `source` field (e.g. `"digiroad"`)
+  and any source-specific attributes (road class, bridge load, etc.).
+- On upstream failure: return **HTTP 200** with an empty
+  `FeatureCollection` and a `meta.status = "unavailable"` field, plus
+  `meta.reason`. The UI must show this transparently — do **not** silently
+  swallow failures.
+
+Source availability is also reported via:
+
+```
+GET /api/sources
+```
+
+→ returns a list of `{ id, label, status: "ok"|"degraded"|"unavailable",
+last_checked, reason? }`.
+
+### Frontend layer contract
+
+Every layer component takes `{ bbox, time }` and renders itself when
+toggled. Drawn shapes live in a separate Zustand store and are **not**
+persisted to the backend in v1 (v2 may POST them for spatial analysis).
+
+### Naming
+
+- Source IDs are lowercase, no spaces: `mml`, `fmi`, `digiroad`, `statfin`,
+  `opencellid`, `n2yo`, `osm`.
+- React components: `PascalCase`. Files match component name.
+- Python modules and functions: `snake_case`.
+
+### Code style
+
+- Backend: `ruff` + `ruff format`. Type hints required on public functions.
+- Frontend: ESLint + Prettier. Strict TypeScript. No `any` without a comment
+  explaining why.
+- No comments unless a reviewer would otherwise misread the code. Self-naming
+  preferred.
+
+### Secrets
+
+- All API keys via environment variables, loaded by `backend/app/config.py`.
+- `.env.example` is committed; `.env` is **gitignored**.
+- Required keys: `MML_API_KEY`, `FMI_API_KEY` (optional but recommended),
+  `OPENCELLID_API_KEY`, `N2YO_API_KEY`.
+- Frontend never sees keys. All third-party calls go through the backend.
+
+---
+
+## 6. Data sources — integration cheat sheet
+
+| ID | Provider | Protocol | Auth | Native CRS | Notes |
+|---|---|---|---|---|---|
+| `mml` | National Land Survey | WMTS (tiles) + WFS (vectors) + GeoTIFF (DEM) | API key | EPSG:3067 | Topographic basemap, buildings, contours, 2 m elevation |
+| `fmi` | Finnish Meteorological Institute | WFS (XML) via `fmiopendata` | API key (optional) | EPSG:4326 | Observations, HARMONIE forecast, radar, lightning |
+| `statfin` | Statistics Finland | PxWeb REST (JSON-stat) + Paavo WFS | none | EPSG:3067 (Paavo) | Demographics by municipality / postal code |
+| `digiroad` | Väylä | GeoPackage download + WFS | none | EPSG:3067 | Roads, bridges with load capacity, ferries |
+| `opencellid` | OpenCelliD | CSV dump or REST | API key | EPSG:4326 | Prefer CSV dump (no rate limit) |
+| `n2yo` | N2YO | REST (JSON) | API key | n/a | Satellite overpasses for given lat/lon |
+| `osm` | OpenStreetMap | Overpass API | none | EPSG:4326 | Hospitals, fuel, power lines, ports — for global generalisability |
+
+The MML WMTS basemap is **fetched directly by the frontend** (it's just tile
+URLs with the API key in a query string — proxy through backend if we want
+to hide the key, otherwise inline). Everything else goes through the backend.
+
+---
+
+## 7. Hackathon priority order
+
+Build vertically. Each step must produce something demoable end-to-end.
+
+1. **Skeleton**: empty Leaflet map with OSM basemap + FastAPI hello-world +
+   bbox query plumbing.
+2. **MML WMTS basemap** as a switchable base layer.
+3. **Drawing tools** (geoman) with route + danger zone + marker.
+4. **Digiroad roads & bridges** layer from a local GeoPackage, filtered by
+   bbox.
+5. **FMI weather** widget in the dashboard (current + 24 h forecast for AOI
+   centroid).
+6. **Statistics Finland Paavo** population choropleth.
+7. **OpenCelliD** clustered points + simple coverage buffer rings.
+8. **OSM Overpass** layer for hospitals / fuel / power (the
+   generalisability story).
+9. **N2YO** satellite overpass schedule in the dashboard.
+10. **Source-status panel** showing which providers responded for the
+    current AOI (judging criterion).
+
+Anything beyond 10 is bonus: line-of-sight from MML DEM, cross-layer
+analysis ("which roads cross the danger zone the user just drew?"),
+LLM-generated AOI summary, etc.
+
+---
+
+## 8. Running the project
+
+> Both apps run independently. The frontend's Vite dev server proxies `/api`
+> to the backend on `localhost:8000`.
+
+### Backend
+
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt        # or: pip install -e .
+cp .env.example .env                   # then fill in API keys
+uvicorn app.main:app --reload --port 8000
+```
+
+OpenAPI docs at <http://localhost:8000/docs>.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                            # http://localhost:5173
+```
+
+---
+
+## 9. Rules for AI agents working on this repo
+
+- **Stay in your folder.** Frontend agents do not edit `backend/`, and vice
+  versa, unless the user explicitly says so.
+- **Honour the GeoJSON-EPSG:4326 contract.** Do not invent new response
+  shapes. If a new endpoint is needed, document it in §6 of this file in the
+  same change.
+- **No silent failures.** If an upstream source is down, return a structured
+  empty result with `meta.status` set; do not throw 500s, do not return
+  fake data.
+- **Minimal dependencies.** Before adding a library, check if Leaflet /
+  GeoPandas / FastAPI already do it. Justify additions in the PR / commit
+  message.
+- **No hard-coded secrets.** Ever. Use env vars.
+- **No commits of files in `data/`.** It is gitignored for a reason.
+- **Update this file** when architecture, source list, endpoint shape, or
+  folder layout changes. Out-of-date instructions are worse than none.
+- **Preserve `challenge.md`** verbatim — it's the original brief.
+
+---
+
+## 10. Glossary
+
+- **IPB** — Intelligence Preparation of the Battlespace. The process this
+  tool automates. See MCRP 2-10B.1.
+- **AOI** — Area of Interest. The bbox/polygon the user is analysing.
+- **WFS / WMTS / WMS** — OGC web services for vector features and raster
+  tiles respectively.
+- **EPSG:3067** — ETRS-TM35FIN, the projected CRS used by most Finnish
+  authorities.
+- **EPSG:4326** — WGS84 geographic CRS (lon/lat). Our wire format.
+- **GeoJSON** — JSON encoding for geographic features. Our wire format.
