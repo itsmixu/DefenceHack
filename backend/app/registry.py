@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .providers.base import Provider
 from .providers.fmi import FMIProvider
 from .providers.osm import OSMProvider
+from .providers.statfin import StatFinProvider
 from .schemas import SourceInfo
 
 
@@ -34,6 +35,7 @@ SOURCE_IDS: frozenset[str] = frozenset(s.id for s in SOURCES)
 PROVIDERS: dict[str, Provider] = {
     "osm": OSMProvider(),
     "fmi": FMIProvider(),
+    "statfin": StatFinProvider(),
 }
 
 
