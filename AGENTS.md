@@ -81,15 +81,22 @@ Neither side may reach into the other's folder without coordinating. The
 
 ### Backend (`backend/`)
 
-- **Framework**: **FastAPI** + Uvicorn (async, automatic OpenAPI docs at
-  `/docs`).
-- **Geo**: GeoPandas, Shapely, pyproj, rasterio (only if elevation work).
-- **HTTP client**: httpx (async).
-- **FMI helper**: `fmiopendata` (wraps the FMI WFS).
-- **Validation**: Pydantic v2.
-- **Caching**: simple on-disk cache in `data/cache/` keyed by
-  `(source, bbox, t)`. No Redis for now.
-- **No database** unless we hit a wall. GeoPackage / Parquet on disk is fine.
+- **Language**: Python (3.11+ assumed).
+- **Everything else is the backend owner's choice** and will be filled in
+  here by their agent once they scaffold the service. Likely candidates
+  (not binding): FastAPI or Flask for the HTTP layer; GeoPandas / Shapely /
+  pyproj for geo work; httpx or requests for upstream calls;
+  `fmiopendata` for FMI.
+- **Hard requirements regardless of stack choice**:
+  - Must expose the HTTP API documented in §6 (GeoJSON in EPSG:4326).
+  - Must read API keys from environment variables, never hard-coded.
+  - Must cache upstream responses to disk under `data/cache/` so the demo
+    is resilient to flaky networks.
+  - Must not require a database for v1 (files on disk are fine).
+
+> Backend agent: when you lock in the stack, replace this subsection with
+> the concrete choices (framework, libraries, run command, port) so the
+> frontend agent knows what it's talking to.
 
 ### Shared
 
@@ -110,24 +117,7 @@ DefenceHack/
 ├── README.md                  # human-facing readme (run/build instructions)
 │
 ├── backend/                   # Python service (teammate)
-│   ├── README.md
-│   ├── pyproject.toml         # or requirements.txt
-│   ├── app/
-│   │   ├── main.py            # FastAPI entrypoint, CORS, routes
-│   │   ├── config.py          # env var loading (API keys)
-│   │   ├── models.py          # Pydantic schemas
-│   │   ├── geo.py             # CRS / bbox helpers
-│   │   ├── cache.py           # on-disk cache helpers
-│   │   └── sources/           # one module per data provider
-│   │       ├── __init__.py
-│   │       ├── mml.py         # National Land Survey of Finland
-│   │       ├── fmi.py         # Finnish Meteorological Institute
-│   │       ├── statfin.py     # Statistics Finland (PxWeb + Paavo)
-│   │       ├── digiroad.py    # Digiroad / Väylä roads & bridges
-│   │       ├── opencellid.py  # OpenCelliD cell towers
-│   │       ├── n2yo.py        # satellite overpasses
-│   │       └── osm.py         # OpenStreetMap Overpass (generalisability)
-│   └── tests/
+│   └── README.md              # internal layout decided by backend owner
 │
 ├── frontend/                  # React app (Miko)
 │   ├── README.md
@@ -167,7 +157,8 @@ datasets, API keys, or generated GeoJSON.
   hides this).
 - **Reproject in the backend, never in the frontend.** Every endpoint returns
   EPSG:4326 GeoJSON. Period.
-- Helper: `backend/app/geo.py` exposes `to_wgs84(gdf)` and `bbox_to_polygon`.
+- The backend is expected to provide internal helpers for reprojection and
+  bbox handling; the exact module path is the backend owner's call.
 
 ### API endpoint shape
 
@@ -215,10 +206,11 @@ persisted to the backend in v1 (v2 may POST them for spatial analysis).
 
 ### Secrets
 
-- All API keys via environment variables, loaded by `backend/app/config.py`.
+- All API keys via environment variables, loaded by the backend.
 - `.env.example` is committed; `.env` is **gitignored**.
-- Required keys: `MML_API_KEY`, `FMI_API_KEY` (optional but recommended),
-  `OPENCELLID_API_KEY`, `N2YO_API_KEY`.
+- Expected keys (final names confirmed by backend owner): `MML_API_KEY`,
+  `FMI_API_KEY` (optional but recommended), `OPENCELLID_API_KEY`,
+  `N2YO_API_KEY`.
 - Frontend never sees keys. All third-party calls go through the backend.
 
 ---
@@ -274,15 +266,9 @@ LLM-generated AOI summary, etc.
 
 ### Backend
 
-```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt        # or: pip install -e .
-cp .env.example .env                   # then fill in API keys
-uvicorn app.main:app --reload --port 8000
-```
-
-OpenAPI docs at <http://localhost:8000/docs>.
+See `backend/README.md` once the backend owner has scaffolded the service.
+Whatever the stack, it must listen on `http://localhost:8000` and expose
+the endpoints in §6 so the frontend dev proxy works unchanged.
 
 ### Frontend
 

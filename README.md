@@ -13,7 +13,7 @@ infrastructure, demographics, satellite overpasses, etc.) on an interactive
 - `challenge.md` — the original 61N challenge brief.
 - **`AGENTS.md` — single source of truth for architecture, conventions, API
   contract, and data-source integration. Read this before doing anything.**
-- `backend/` — FastAPI + GeoPandas service that exposes GeoJSON over HTTP.
+- `backend/` — Python service that exposes GeoJSON over HTTP (scaffolded by the backend owner; framework TBD).
 - `frontend/` — Vite + React + Leaflet map app.
 - `data/` — gitignored local cache and raw downloads.
 
@@ -23,11 +23,8 @@ In two terminals:
 
 ```bash
 # terminal 1 — backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # fill in API keys
-uvicorn app.main:app --reload --port 8000
+# (Python service, scaffolded by the backend owner — see backend/README.md.
+#  Must listen on http://localhost:8000.)
 ```
 
 ```bash
@@ -45,7 +42,7 @@ OpenStreetMap. Full integration details in `AGENTS.md` §6.
 
 ## Team
 
-- Backend (Python, data fetching) — teammate.
+- Backend (Python, data fetching) — Artem.
 - Frontend (map, drawing, dashboard) — Miko.
 
 Joined only by the GeoJSON-over-HTTP contract documented in `AGENTS.md`.
