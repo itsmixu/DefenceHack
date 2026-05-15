@@ -1,9 +1,11 @@
-"""Registry of data sources. Providers are wired in here as they come online."""
+"""Registry of data providers. Providers are wired in here as they come online."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .schemas import SourceInfo, SourceStatus
+from .providers.base import Provider
+from .providers.osm import OSMProvider
+from .schemas import SourceInfo
 
 
 @dataclass(frozen=True)
@@ -26,13 +28,34 @@ SOURCES: tuple[SourceSpec, ...] = (
 SOURCE_IDS: frozenset[str] = frozenset(s.id for s in SOURCES)
 
 
-def default_source_info() -> list[SourceInfo]:
-    return [
-        SourceInfo(
-            id=s.id,
-            label=s.label,
-            status="unknown",
-            reason="not yet implemented",
-        )
-        for s in SOURCES
-    ]
+# Live provider instances. Sources not yet implemented are absent here and
+# reported as "unknown / not yet implemented" by the /api/sources endpoint.
+PROVIDERS: dict[str, Provider] = {
+    "osm": OSMProvider(),
+}
+
+
+def list_source_info() -> list[SourceInfo]:
+    out: list[SourceInfo] = []
+    for spec in SOURCES:
+        provider = PROVIDERS.get(spec.id)
+        if provider is None:
+            out.append(
+                SourceInfo(
+                    id=spec.id,
+                    label=spec.label,
+                    status="unknown",
+                    reason="not yet implemented",
+                )
+            )
+        else:
+            out.append(
+                SourceInfo(
+                    id=spec.id,
+                    label=spec.label,
+                    status=provider.status.status,
+                    last_checked=provider.status.last_checked,
+                    reason=provider.status.reason,
+                )
+            )
+    return out
