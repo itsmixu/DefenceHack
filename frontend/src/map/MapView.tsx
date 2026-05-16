@@ -249,13 +249,6 @@ export default function MapView() {
           })}
       </div>
 
-      <div className="pointer-events-auto absolute top-3 left-1/2 z-[1000] w-[min(760px,calc(100%-2rem))] -translate-x-1/2 rounded border border-white/15 bg-black/90 px-4 py-3 text-white shadow-[0_10px_28px_rgba(0,0,0,0.5)] backdrop-blur-sm">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/65">Timeline</span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-white/80">
-            {selectedLocal} · {selectedIso}
-          </span>
-        </div>
       <div className="pointer-events-auto absolute inset-x-0 top-0 z-[1000] border-b border-white/15 bg-[#0b0b0b] px-2 py-1 text-white shadow-[0_4px_14px_rgba(0,0,0,0.5)]">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-1">
           <div className="flex flex-wrap items-center justify-between gap-1.5">

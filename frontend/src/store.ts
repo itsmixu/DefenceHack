@@ -110,6 +110,8 @@ interface FeatureCacheState {
   addBatch: (id: LayerKey, fetched: Bbox4, features: Feature[]) => void;
   clear: (id: LayerKey) => void;
   clearAll: () => void;
+  /** Inject saved layer snapshots directly (bypass network fetch). */
+  injectSnapshots: (snapshots: Record<string, { features: Feature[] }>, fileBbox?: Bbox4) => void;
 }
 
 // 32-bit FNV-1a hash — fast, no deps, good enough to dedupe geometries.
@@ -160,6 +162,19 @@ export const useFeatureCacheStore = create<FeatureCacheState>((set) => ({
       covered: { ...s.covered, [id]: [] },
     })),
   clearAll: () => set({ features: {}, covered: {} }),
+  injectSnapshots: (snapshots, fileBbox) =>
+    set((s) => {
+      const features = { ...s.features };
+      const covered = { ...s.covered };
+      const coverageBbox: Bbox4 = fileBbox ?? [-180, -90, 180, 90];
+      for (const [id, fc] of Object.entries(snapshots)) {
+        if (fc && Array.isArray(fc.features)) {
+          features[id as LayerKey] = fc.features as Feature[];
+          covered[id as LayerKey] = [coverageBbox];
+        }
+      }
+      return { features, covered };
+    }),
 }));
 
 export const bboxContains = (outer: Bbox4, inner: Bbox4): boolean =>

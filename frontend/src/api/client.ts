@@ -16,13 +16,13 @@ import type {
   TimelineSnapshotResponse,
   VehicleClass,
   ViewshedResponse,
-  LayerKey,
-  Plan,
-  PlanSummary,
-  PlanVersion,
-  PlanVersionSummary,
   CreatePlanBody,
   CreateVersionBody,
+  FsFolder,
+  FsFileMeta,
+  FsFileContent,
+  FsTree,
+  FsSaveBody,
 } from './types';
 
 export interface BboxQuery {
@@ -76,14 +76,6 @@ export function getLayer(layer: LayerKey, query: BboxQuery): Promise<LayerRespon
 
 export function getTerrainEffects(query: BboxQuery): Promise<TerrainEffectsResponse> {
   return fetchJson<TerrainEffectsResponse>(`/api/analyze/terrain-effects${buildQuery(query)}`);
-}
-
-export interface DroneRating { current_rating: 'go' | 'marginal' | 'no-go'; limiting_factors: string[]; station_count: number }
-export interface DroneConditionsResponse {
-  summary: DroneRating & { stations_no_go: number; stations_marginal: number };
-  station_features: { type: string; features: Array<{ geometry: unknown; properties: Record<string, unknown> }> };
-  forecast_timeline: Array<{ time: string; drone_rating: string; wind_ms: number | null; wind_gust_ms: number | null; temp_c: number | null }>;
-  thresholds: Record<string, unknown>;
 }
 
 export function getDroneConditions(query: BboxQuery): Promise<DroneConditionsResponse> {
@@ -204,4 +196,95 @@ export function getPlanVersion(planId: string, version: number): Promise<PlanVer
  */
 export function createPlanVersion(planId: string, body: CreateVersionBody): Promise<PlanVersion> {
   return postJson<PlanVersion>(`/api/plans/${planId}/versions`, body);
+}
+
+// ── Filesystem ────────────────────────────────────────────────────────────────
+
+export function fsGetTree(): Promise<FsTree> {
+  return fetchJson<FsTree>('/api/fs/tree');
+}
+
+export function fsGetRecent(limit = 10): Promise<FsFileMeta[]> {
+  return fetchJson<FsFileMeta[]>(`/api/fs/recent?limit=${limit}`);
+}
+
+export function fsSearch(q: string): Promise<FsFileMeta[]> {
+  return fetchJson<FsFileMeta[]>(`/api/fs/search?q=${encodeURIComponent(q)}`);
+}
+
+export function fsOpenFile(id: string): Promise<FsFileContent> {
+  return fetchJson<FsFileContent>(`/api/fs/files/${id}`);
+}
+
+export async function fsSaveFile(body: FsSaveBody): Promise<FsFileMeta> {
+  const res = await fetch('/api/fs/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`POST /api/fs/files -> HTTP ${res.status}`);
+  return (await res.json()) as FsFileMeta;
+}
+
+export async function fsRenameFile(id: string, name: string): Promise<FsFileMeta> {
+  const res = await fetch(`/api/fs/files/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`PATCH /api/fs/files/${id} -> HTTP ${res.status}`);
+  return (await res.json()) as FsFileMeta;
+}
+
+export async function fsMoveFile(id: string, folder_id: string | null): Promise<FsFileMeta> {
+  const res = await fetch(`/api/fs/files/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder_id }),
+  });
+  if (!res.ok) throw new Error(`PATCH /api/fs/files/${id} -> HTTP ${res.status}`);
+  return (await res.json()) as FsFileMeta;
+}
+
+export async function fsDuplicateFile(id: string, name?: string): Promise<FsFileMeta> {
+  const res = await fetch(`/api/fs/files/${id}/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(name ? { name } : {}),
+  });
+  if (!res.ok) throw new Error(`POST /api/fs/files/${id}/duplicate -> HTTP ${res.status}`);
+  return (await res.json()) as FsFileMeta;
+}
+
+export async function fsDeleteFile(id: string): Promise<void> {
+  const res = await fetch(`/api/fs/files/${id}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) throw new Error(`DELETE /api/fs/files/${id} -> HTTP ${res.status}`);
+}
+
+export async function fsCreateFolder(name: string, parent_id?: string | null): Promise<FsFolder> {
+  const res = await fetch('/api/fs/folders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, parent_id: parent_id ?? null }),
+  });
+  if (!res.ok) throw new Error(`POST /api/fs/folders -> HTTP ${res.status}`);
+  return (await res.json()) as FsFolder;
+}
+
+export async function fsRenameFolder(id: string, name: string): Promise<FsFolder> {
+  const res = await fetch(`/api/fs/folders/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(`PATCH /api/fs/folders/${id} -> HTTP ${res.status}`);
+  return (await res.json()) as FsFolder;
+}
+
+export async function fsDeleteFolder(id: string, recursive = false): Promise<void> {
+  const res = await fetch(`/api/fs/folders/${id}?recursive=${recursive}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) {
+    const msg = await res.text().catch(() => res.statusText);
+    throw new Error(msg || `DELETE /api/fs/folders/${id} -> HTTP ${res.status}`);
+  }
 }
