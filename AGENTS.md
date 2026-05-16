@@ -247,27 +247,47 @@ what is possible" from the project goals. MML terrain is skipped if
 Doctrinal IPB products that fuse multiple raw layers. These are the
 headline outputs that map directly to the 61N source material on IPB.
 
+All analysis ratings are grounded in **ATP 2-41.1 (2021) Appendix B —
+"Hard numerical thresholds for AI model training."** The thresholds are
+centralised in `backend/app/doctrine.py` and every classification carries
+back the specific table reference (B-1 … B-17) that justified it, so
+judges can audit any colour on the map by reading `mcoo_cite` /
+`functions.<x>.cite`. Pinned by `tests/test_doctrine.py`.
+
 **`GET /api/analyze/mcoo?bbox=…&t=…`** — Modified Combined Obstacle
 Overlay. Per doctrine "the primary terrain analysis output product".
 Returns a GeoJSON FeatureCollection where every feature carries:
   - `mcoo_class`: `"go"` | `"slow-go"` | `"no-go"`
   - `mcoo_role`: `"terrain"` | `"mobility_corridor"` | `"chokepoint_bridge"`
-Frontend renders as the primary tactical overlay (green / yellow / red,
-with bridges highlighted as chokepoints).
+  - `mcoo_cite`: ATP 2-41.1 Appendix B table reference, e.g. `"B-2"`, `"B-16"`
+  - `mcoo_reason`: one-line rationale naming the doctrinal threshold applied
+  - `doctrine`: `"ATP 2-41.1 Appendix B"`
+The FeatureCollection `meta.attribution` is set to
+`"Classification per ATP 2-41.1 (2021) Appendix B"` so the legend can
+display the citation. Frontend renders as the primary tactical overlay
+(green / yellow / red, with bridges highlighted as chokepoints).
 
 **`GET /api/analyze/terrain-effects?bbox=…&t=…`** — Terrain Effects
 Matrix. Structured JSON (not GeoJSON) rating each warfighting function:
 `maneuver`, `fires`, `intelligence`, `sustainment`, `protection`. Each
 has a `rating` (unrestricted / restricted / severely_restricted),
-`rationale` string, and `key_factors` list. Frontend renders as a
-side-panel briefing card. Includes a `source_status` dict so the UI
-can show which feeds backed the assessment.
+`cite` (Appendix B table reference), `rationale` string, and
+`key_factors` list. The response also returns:
+  - `mobility`: weighted mech road speed, total network capacity (vph,
+    Table B-17), bridge count, flow-class breakdown.
+  - `terrain_composition`: % go / slow-go / no-go area share.
+  - `weather`: avg temp / wind, plus `environment_rating` and
+    `aviation_rating` derived from Table B-12.
+Frontend renders as a side-panel briefing card.
 
-**`GET /api/analyze/viewshed?bbox=…&observer_lon=&observer_lat=`** —
-Line-of-sight / dead-ground analysis. STUB; returns `meta.status =
-"unavailable"` because it needs the MML DEM raster pipeline
-(`rasterio` + GeoTIFF) not yet implemented. Documented because it's
-flagged in the 61N material as a key AI capability.
+**`GET /api/analyze/viewshed?bbox=…&observer_lon=&observer_lat=&observer_height_m=`** —
+Line-of-sight / dead-ground analysis. True viewshed needs the MML 2 m
+DEM raster pipeline (`rasterio` + GeoTIFF), still to be built. As a
+fallback the endpoint returns the **Table B-1 geometric horizon** (d =
+3.57·√h km) as a circular polygon around the observer so the frontend
+has something to render and the doctrinal formula is visible.
+`meta.status = "partial"` when fallback is returned, `"unavailable"`
+when no observer point is supplied.
 
 ### Drawn-feature types in plans
 

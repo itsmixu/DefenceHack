@@ -24,6 +24,10 @@ class LayerMeta(BaseModel):
     bbox: list[float] | None = None
     t: datetime | None = None
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Free-form doctrinal / data-source attribution surfaced in the UI.
+    # Analysis endpoints set this to "ATP 2-41.1 Appendix B" so the legend
+    # and source-status panel can show which doctrine drove the rating.
+    attribution: str | None = None
 
 
 class FeatureCollection(BaseModel):
