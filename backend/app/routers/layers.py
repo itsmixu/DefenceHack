@@ -22,6 +22,12 @@ async def get_layer(
     t: datetime | None = Query(
         None, description="ISO 8601 UTC timestamp, e.g. 2026-05-15T12:00:00Z"
     ),
+    grid: int | None = Query(
+        None,
+        ge=1,
+        le=15,
+        description="Optional grid resolution for sampled providers (e.g. fmi_forecast).",
+    ),
 ) -> Response:
     if source not in SOURCE_IDS:
         raise HTTPException(404, f"unknown source '{source}'")
@@ -35,6 +41,9 @@ async def get_layer(
             bbox=bbox.as_list(),
             t=t,
         )
+    elif source == "fmi_forecast":
+        # fmi_forecast accepts an extra `grid` kwarg; other providers don't.
+        fc = await provider.fetch(bbox, t, grid=grid)  # type: ignore[call-arg]
     else:
         fc = await provider.fetch(bbox, t)
 

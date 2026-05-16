@@ -68,7 +68,25 @@ FORECAST_PARAMETERS: tuple[str, ...] = (
 
 CACHE_TTL_SECONDS = 60 * 60     # HARMONIE updates hourly
 FORECAST_HOURS    = 48
-GRID_SIZE         = 3            # 3×3 = 9 sample points
+GRID_SIZE         = 3            # 3×3 = 9 sample points (default; callers may override)
+GRID_SIZE_MIN     = 3
+GRID_SIZE_MAX     = 9
+
+
+def _normalize_grid(grid: int | None) -> int:
+    """Clamp to [GRID_SIZE_MIN, GRID_SIZE_MAX] and force odd (so a centre point exists)."""
+    if grid is None:
+        return GRID_SIZE
+    g = int(grid)
+    if g < GRID_SIZE_MIN:
+        g = GRID_SIZE_MIN
+    elif g > GRID_SIZE_MAX:
+        g = GRID_SIZE_MAX
+    if g % 2 == 0:
+        g += 1
+        if g > GRID_SIZE_MAX:
+            g = GRID_SIZE_MAX - 1 if (GRID_SIZE_MAX % 2 == 0) else GRID_SIZE_MAX
+    return g
 
 NS = {
     "wfs":   "http://www.opengis.net/wfs/2.0",
@@ -206,15 +224,21 @@ class FMIForecastProvider(Provider):
             label="FMI HARMONIE forecast — wind field, clouds, rain, ceiling",
         )
 
-    async def fetch(self, bbox: BBox, t: datetime | None) -> FeatureCollection:
+    async def fetch(
+        self,
+        bbox: BBox,
+        t: datetime | None,
+        grid: int | None = None,
+    ) -> FeatureCollection:
         start = (t or datetime.now(timezone.utc)).astimezone(timezone.utc)
         end   = start + timedelta(hours=FORECAST_HOURS)
+        grid_size = _normalize_grid(grid)
 
         # Coarse cache key — neighbouring viewports share results.
         cache_key = {
             "bbox_round": [round(v, 2) for v in bbox.as_list()],
             "start_h":    start.strftime("%Y-%m-%dT%H:00Z"),
-            "grid":       GRID_SIZE,
+            "grid":       grid_size,
         }
         cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
         if cached is not None:
@@ -229,7 +253,7 @@ class FMIForecastProvider(Provider):
                 ),
             )
 
-        pts = _grid_points(bbox, GRID_SIZE)
+        pts = _grid_points(bbox, grid_size)
 
         try:
             async with httpx.AsyncClient(
@@ -267,7 +291,7 @@ class FMIForecastProvider(Provider):
 
         status = "ok" if partial_failures == 0 else "partial"
         reason = (
-            f"{len(features)} features across {GRID_SIZE}×{GRID_SIZE} grid, "
+            f"{len(features)} features across {grid_size}×{grid_size} grid, "
             f"{FORECAST_HOURS}h horizon"
             + (f" ({partial_failures} grid points failed)" if partial_failures else "")
         )

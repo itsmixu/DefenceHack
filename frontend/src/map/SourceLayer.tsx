@@ -50,15 +50,32 @@ export default function SourceLayer({ layer }: Props) {
   const selectedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
   const isTimeAware = TIME_AWARE_LAYER_SET.has(layer);
 
+  // Forecast adaptive grid: at low zoom the bbox is huge, so 3×3 = 9 cells
+  // looks like one zone; bump to 7×7 / 5×5 so the viewport always carries
+  // enough zones to feel like a weather map. Backend clamps to odd 3..9.
+  const forecastGrid = useMemo<number | undefined>(() => {
+    if (layer !== 'fmi_forecast') return undefined;
+    if (zoom == null) return 5;
+    if (zoom <= 6) return 7;
+    if (zoom <= 9) return 5;
+    return 3;
+  }, [layer, zoom]);
+
   // Time-aware layers return different data per `t`, but the spatial coverage
   // cache (`covered`) is keyed only on bbox. Without this effect, after the
   // first fetch `alreadyCovered` would short-circuit `needsFetch=false` and
   // the slider would never trigger a re-fetch. Clear the layer's cache when
   // the committed time changes so the next render re-fetches for the new `t`.
+  // Same applies to forecastGrid: a different grid produces different points,
+  // so the existing cache is stale and must be cleared.
   useEffect(() => {
     if (!isTimeAware) return;
     clearLayerCache(layer);
   }, [isTimeAware, committedMs, layer, clearLayerCache]);
+  useEffect(() => {
+    if (forecastGrid == null) return;
+    clearLayerCache(layer);
+  }, [forecastGrid, layer, clearLayerCache]);
 
   // Decide whether the current viewport is already covered by a previously
   // fetched bbox. If so, skip the network request and just render the cache.
@@ -78,15 +95,16 @@ export default function SourceLayer({ layer }: Props) {
     // Non-time-aware layers omit selectedIso from the key so they don't
     // invalidate (and re-fetch) every time the timeline scrubber moves.
     queryKey: isTimeAware
-      ? ['layer', layer, fetchBboxStr, selectedIso]
+      ? ['layer', layer, fetchBboxStr, selectedIso, forecastGrid ?? 'na']
       : ['layer', layer, fetchBboxStr],
     enabled: needsFetch && !!fetchBboxStr,
     queryFn: () => {
       if (!fetchBboxStr) throw new Error('no bbox');
-      const params = isTimeAware
+      const params: Record<string, string | undefined> = isTimeAware
         ? { bbox: fetchBboxStr, t: selectedIso }
         : { bbox: fetchBboxStr };
-      return getLayer(layer, params);
+      if (forecastGrid != null) params.grid = String(forecastGrid);
+      return getLayer(layer, params as { bbox: string; t?: string });
     },
   });
 

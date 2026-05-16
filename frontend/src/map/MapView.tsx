@@ -71,25 +71,37 @@ export default function MapView() {
   const [timelineStartMs, setTimelineStartMs] = useState(rangeStartMs);
 
   const stepMs = stepMinutes * 60 * 1000;
-  const timelineSpanMs = rangeEndMs - rangeStartMs;
-  const maxStartMs = Math.max(rangeStartMs, rangeEndMs - stepMs);
+  // "Now" tick — bumped once a minute so the slider's right edge keeps up
+  // with wall-clock without thrashing renders. Snap to a step boundary so
+  // the slider step alignment stays clean.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const nowMs = Math.round(nowTick / stepMs) * stepMs;
+
+  const maxStartMs = Math.max(rangeStartMs, nowMs - stepMs);
   const visibleStartMs = Math.min(maxStartMs, Math.max(rangeStartMs, timelineStartMs));
-  const visibleEndMs = Math.min(rangeEndMs, visibleStartMs + timelineSpanMs);
-  const sliderSteps = Math.max(1, Math.round((visibleEndMs - visibleStartMs) / stepMs));
+  const sliderSteps = Math.max(1, Math.round((nowMs - visibleStartMs) / stepMs));
   const sliderValue = Math.min(sliderSteps, Math.max(0, Math.round((selectedMs - visibleStartMs) / stepMs)));
   // Basemap URLs key off the committed time so dragging the slider doesn't
   // thrash tile fetches; the displayed label tracks the live thumb position.
   const committedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
   const timelineStartInput = useMemo(() => toDatetimeLocalValue(visibleStartMs), [visibleStartMs]);
-  const selectedInput = useMemo(() => toDatetimeLocalValue(selectedMs), [selectedMs]);
-  const sectionTimes = useMemo(() => {
-    const sections = 6;
+  const selectedLabel = useMemo(() => {
+    const d = new Date(selectedMs);
+    return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }, [selectedMs]);
+  // Evenly-spaced tick marks along the slider track for visual scale.
+  const tickTimes = useMemo(() => {
+    const sections = 8;
+    const span = nowMs - visibleStartMs;
     return Array.from({ length: sections + 1 }, (_, i) => {
       const ratio = i / sections;
-      const ms = Math.round(visibleStartMs + (visibleEndMs - visibleStartMs) * ratio);
-      return Math.round(ms / stepMs) * stepMs;
+      return Math.round(visibleStartMs + span * ratio);
     });
-  }, [visibleStartMs, visibleEndMs, stepMs]);
+  }, [visibleStartMs, nowMs]);
 
   useEffect(() => {
     setTimelineStartMs(rangeStartMs);
@@ -292,74 +304,103 @@ export default function MapView() {
           })}
       </div>
 
-      <div className="pointer-events-auto absolute inset-x-0 top-0 z-[1000] border-b border-white/15 bg-[#0b0b0b] px-2 py-1 text-white shadow-[0_4px_14px_rgba(0,0,0,0.5)]">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-1">
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-white/60">Timeline</span>
-            <div className="flex flex-wrap items-center gap-1.5 text-[9px] uppercase tracking-[0.04em] text-white/75">
-              <label className="flex items-center gap-1">
-                <span className="font-mono">Start</span>
-                <input
-                  type="datetime-local"
-                  value={timelineStartInput}
-                  onChange={(e) => {
-                    const ms = new Date(e.target.value).getTime();
-                    if (Number.isFinite(ms)) setTimelineStartMs(ms);
-                  }}
-                  className="rounded border border-white/20 bg-black px-1 py-0.5 text-[10px] text-white"
-                />
-              </label>
-              <label className="flex items-center gap-1">
-                <span className="font-mono">Selected</span>
-                <input
-                  type="datetime-local"
-                  value={selectedInput}
-                  onChange={(e) => {
-                    const ms = new Date(e.target.value).getTime();
-                    if (Number.isFinite(ms)) commitSelectedMs(ms);
-                  }}
-                  className="rounded border border-white/20 bg-black px-1 py-0.5 text-[10px] text-white"
-                />
-              </label>
-              <span className="font-mono text-white/50">step {stepMinutes}m</span>
+      <div className="pointer-events-auto absolute left-1/2 top-3 z-[1000] w-[min(96vw,920px)] -translate-x-1/2 rounded-lg border border-white/15 bg-[#0b0b0b]/95 px-3 py-2 text-white shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <label className="flex shrink-0 flex-col gap-0.5">
+            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-white/55">Start</span>
+            <input
+              type="datetime-local"
+              value={timelineStartInput}
+              onChange={(e) => {
+                const ms = new Date(e.target.value).getTime();
+                if (Number.isFinite(ms)) setTimelineStartMs(ms);
+              }}
+              className="rounded border border-white/20 bg-black px-1.5 py-0.5 font-mono text-[11px] text-white"
+            />
+          </label>
+
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            {/* Tick marks layered behind the slider track */}
+            <div className="pointer-events-none relative mt-3 h-2 w-full">
+              {tickTimes.map((ms, idx) => {
+                const ratio = idx / (tickTimes.length - 1);
+                return (
+                  <span
+                    key={`tick-${idx}`}
+                    className="absolute top-0 h-2 w-px bg-white/35"
+                    style={{ left: `${ratio * 100}%` }}
+                  />
+                );
+              })}
+            </div>
+
+            <input
+              type="range"
+              min={0}
+              max={sliderSteps}
+              step={1}
+              value={sliderValue}
+              onChange={(e) => {
+                const idx = Number(e.target.value);
+                setSelectedMs(visibleStartMs + idx * stepMs);
+              }}
+              onPointerUp={commitSelected}
+              onMouseUp={commitSelected}
+              onTouchEnd={commitSelected}
+              onKeyUp={commitSelected}
+              className="h-1 w-full accent-white"
+              aria-label="Operational timeline"
+            />
+
+            {/* Tick labels under the track */}
+            <div className="relative mt-1 h-3 w-full">
+              {tickTimes.map((ms, idx) => {
+                const ratio = idx / (tickTimes.length - 1);
+                const label = formatTick(ms, nowMs);
+                const align =
+                  idx === 0 ? 'translate-x-0' :
+                  idx === tickTimes.length - 1 ? '-translate-x-full' :
+                  '-translate-x-1/2';
+                return (
+                  <span
+                    key={`label-${idx}`}
+                    className={`absolute top-0 font-mono text-[9px] uppercase tracking-[0.04em] text-white/55 ${align}`}
+                    style={{ left: `${ratio * 100}%` }}
+                    title={new Date(ms).toISOString()}
+                  >
+                    {label}
+                  </span>
+                );
+              })}
             </div>
           </div>
 
-          <input
-            type="range"
-            min={0}
-            max={sliderSteps}
-            step={1}
-            value={sliderValue}
-            onChange={(e) => {
-              const idx = Number(e.target.value);
-              setSelectedMs(visibleStartMs + idx * stepMs);
-            }}
-            onPointerUp={commitSelected}
-            onMouseUp={commitSelected}
-            onTouchEnd={commitSelected}
-            onKeyUp={commitSelected}
-            className="h-1 w-full accent-white"
-            aria-label="Operational timeline"
-          />
-
-          <div className="grid grid-cols-7 gap-0.5">
-            {sectionTimes.map((ms, idx) => (
-              <button
-                key={`${ms}-${idx}`}
-                type="button"
-                onClick={() => commitSelectedMs(ms)}
-                className="rounded border border-white/15 bg-[#161616] px-1 py-0.5 text-center font-mono text-[9px] uppercase tracking-[0.02em] text-white/75 hover:bg-white/[0.12]"
-                title={new Date(ms).toISOString()}
-              >
-                {new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              </button>
-            ))}
+          <div className="shrink-0 text-right">
+            <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-white/55">Now</div>
+            <button
+              type="button"
+              onClick={() => commitSelectedMs(nowMs)}
+              className="rounded border border-white/20 bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white/90 hover:bg-white/[0.14]"
+              title="Snap selection to current time"
+            >
+              {selectedLabel}
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function formatTick(ms: number, nowMs: number): string {
+  // Closer to "now" → show clock time only; further out → include the date.
+  const deltaH = Math.round((nowMs - ms) / (60 * 60 * 1000));
+  if (deltaH <= 0) return 'now';
+  const d = new Date(ms);
+  if (deltaH < 24) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit' });
 }
 
 function toDatetimeLocalValue(ms: number): string {
