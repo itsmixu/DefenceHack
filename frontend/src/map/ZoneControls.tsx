@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Check,
@@ -14,6 +14,7 @@ import { prefetchBbox, PREFETCH_LAYERS } from '../lib/prefetch';
 import {
   useBackendStatusStore,
   useMapStore,
+  useTimelineStore,
   useToastStore,
   useZonesStore,
   type Bbox4,
@@ -32,6 +33,8 @@ export default function ZoneControls() {
   const setPrefetch = useZonesStore((s) => s.setPrefetch);
   const setBackendUnavailable = useBackendStatusStore((s) => s.setUnavailable);
   const setBackendAvailable = useBackendStatusStore((s) => s.setAvailable);
+  const selectedMs = useTimelineStore((s) => s.selectedMs);
+  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
   const push = useToastStore((s) => s.push);
   const qc = useQueryClient();
 
@@ -45,7 +48,7 @@ export default function ZoneControls() {
     setPrefetch(zone.id, 'fetching');
     push('info', `Prefetching ${PREFETCH_LAYERS.length} sources for "${zone.name}"…`);
     try {
-      const results = await prefetchBbox(qc, zone.bbox);
+      const results = await prefetchBbox(qc, zone.bbox, selectedIso);
       const backendDown = results.some((r) => r.backendDown);
       if (backendDown) {
         setPrefetch(zone.id, 'error');

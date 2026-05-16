@@ -63,6 +63,10 @@ def test_each_feature_has_required_fields():
     for f in fc.features:
         props = f["properties"]
         assert "date" in props
+        assert "civil_dawn" in props
+        assert "civil_dusk" in props
+        assert "nautical_dawn" in props
+        assert "nautical_dusk" in props
         assert "moon_illumination_pct" in props
         assert "night_ops_rating" in props
         assert props["night_ops_rating"] in ("dark", "partial", "bright")

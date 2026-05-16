@@ -43,6 +43,33 @@ export const useBboxStore = create<BboxState>((set) => ({
   setBbox: (bbox) => set({ bbox }),
 }));
 
+// ---------- Timeline state ----------
+const TIMELINE_RANGE_PAST_HOURS = 72;
+const TIMELINE_RANGE_FUTURE_HOURS = 48;
+const TIMELINE_STEP_MINUTES = 60;
+
+const timelineNowMs = Date.now();
+
+interface TimelineState {
+  rangeStartMs: number;
+  rangeEndMs: number;
+  stepMinutes: number;
+  selectedMs: number;
+  setSelectedMs: (ms: number) => void;
+}
+
+export const useTimelineStore = create<TimelineState>((set, get) => ({
+  rangeStartMs: timelineNowMs - TIMELINE_RANGE_PAST_HOURS * 60 * 60 * 1000,
+  rangeEndMs: timelineNowMs + TIMELINE_RANGE_FUTURE_HOURS * 60 * 60 * 1000,
+  stepMinutes: TIMELINE_STEP_MINUTES,
+  selectedMs: timelineNowMs,
+  setSelectedMs: (ms) => {
+    const { rangeStartMs, rangeEndMs } = get();
+    const clamped = Math.min(rangeEndMs, Math.max(rangeStartMs, ms));
+    set({ selectedMs: clamped });
+  },
+}));
+
 interface LayerState {
   active: Partial<Record<LayerKey, boolean>>;
   status: Partial<Record<LayerKey, LayerStatus>>;

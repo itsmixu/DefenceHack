@@ -17,7 +17,6 @@ and areas where adversary or friendly signals could be exploited/jammed.
 """
 from __future__ import annotations
 
-import math
 import os
 from datetime import datetime
 
@@ -111,11 +110,22 @@ class OpenCelliDProvider(Provider):
         cache_key = {"bbox": bbox.as_list()}
         cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
         if cached is not None:
-            self.mark("ok", "served from cache")
+            cached_features = cached.get("features", [])
+            cached_status = cached.get("status")
+            cached_reason = cached.get("reason")
+            if cached_status not in {"ok", "partial", "unavailable"}:
+                if cached_features:
+                    cached_status = "ok"
+                    cached_reason = "served from cache"
+                else:
+                    cached_status = "partial"
+                    cached_reason = "served from cache (no towers in bbox)"
+
+            self.mark(cached_status, cached_reason)
             return FeatureCollection(
-                features=cached.get("features", []),
+                features=cached_features,
                 meta=LayerMeta(
-                    source=self.id, status="ok", reason="served from cache",
+                    source=self.id, status=cached_status, reason=cached_reason,
                     bbox=bbox.as_list(), t=t,
                 ),
             )
@@ -150,12 +160,21 @@ class OpenCelliDProvider(Provider):
                 bbox=bbox.as_list(), t=t,
             )
 
+        if payload.get("error"):
+            reason = f"OpenCelliD error: {payload.get('error')}"
+            self.mark("unavailable", reason)
+            return empty_collection(
+                self.id,
+                status="unavailable",
+                reason=reason,
+                bbox=bbox.as_list(),
+                t=t,
+            )
+
         cells = payload.get("cells") or []
         features = [f for cell in cells for f in _cell_features(cell)]
 
         truncated = payload.get("count", 0) >= MAX_CELLS
-        cache.write(self.id, cache_key, {"features": features})
-
         tower_count = len(cells)
         status = "ok" if features else "partial"
         if truncated:
@@ -165,6 +184,13 @@ class OpenCelliDProvider(Provider):
             reason = f"{tower_count} towers"
         else:
             reason = "no towers in bbox"
+
+        cache.write(
+            self.id,
+            cache_key,
+            {"features": features, "status": status, "reason": reason},
+        )
+
         self.mark(status, reason)
         return FeatureCollection(
             features=features,
