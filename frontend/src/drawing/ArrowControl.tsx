@@ -10,6 +10,7 @@
  *     always looks correct regardless of latitude or zoom level.
  *   • On zoomend: all arrowheads are recomputed so they stay the right pixel size.
  *   • Subscribes to useDrawnStore to remove Leaflet layers when DrawnList deletes an arrow.
+ *   • Delete mode: when isDeleteMode is true, clicking any arrow removes it immediately.
  */
 import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
@@ -120,25 +121,28 @@ function makeArrowLayers(
 export default function ArrowControl() {
   const map = useMap();
 
-  const isArrowMode = useTacticalStore((s) => s.isArrowMode);
-  const arrowColor  = useTacticalStore((s) => s.arrowColor);
-  const arrowSize   = useTacticalStore((s) => s.arrowSize);
+  const isArrowMode  = useTacticalStore((s) => s.isArrowMode);
+  const isDeleteMode = useTacticalStore((s) => s.isDeleteMode);
+  const arrowColor   = useTacticalStore((s) => s.arrowColor);
+  const arrowSize    = useTacticalStore((s) => s.arrowSize);
   const setArrowMode = useTacticalStore((s) => s.setArrowMode);
 
   // All arrow entries indexed by id — lives as a ref so Leaflet callbacks see latest
-  const arrowsRef   = useRef<Map<string, ArrowEntry>>(new Map());
+  const arrowsRef    = useRef<Map<string, ArrowEntry>>(new Map());
   // Ghost layers shown while dragging
-  const ghostRef    = useRef<{ shaft: L.Polyline; head: L.Polygon } | null>(null);
-  const drawingRef  = useRef(false);
-  const startRef    = useRef<L.LatLng | null>(null);
-  const colorRef    = useRef(arrowColor);
-  const sizeRef     = useRef(arrowSize);
-  const modeRef     = useRef(isArrowMode);
+  const ghostRef     = useRef<{ shaft: L.Polyline; head: L.Polygon } | null>(null);
+  const drawingRef   = useRef(false);
+  const startRef     = useRef<L.LatLng | null>(null);
+  const colorRef     = useRef(arrowColor);
+  const sizeRef      = useRef(arrowSize);
+  const modeRef      = useRef(isArrowMode);
+  const deleteModeRef = useRef(isDeleteMode);
 
   // Keep refs in sync with latest Zustand values without re-creating handlers
-  colorRef.current = arrowColor;
-  sizeRef.current  = arrowSize;
-  modeRef.current  = isArrowMode;
+  colorRef.current      = arrowColor;
+  sizeRef.current       = arrowSize;
+  modeRef.current       = isArrowMode;
+  deleteModeRef.current = isDeleteMode;
 
   // ── Cursor management ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -224,6 +228,8 @@ export default function ArrowControl() {
     }
 
     function onMouseDown(e: MouseEvent) {
+      // In delete mode, suppress drawing interactions
+      if (deleteModeRef.current) return;
       if (!modeRef.current) return;
       // Only left button
       if (e.button !== 0) return;
@@ -252,7 +258,7 @@ export default function ArrowControl() {
     function onMouseMove(e: MouseEvent) {
       if (!drawingRef.current || !startRef.current || !ghostRef.current) return;
       const end = getLatLng(e.clientX, e.clientY);
-      const [weight, headLen, headWid] = sizeParams(sizeRef.current);
+      const [, headLen, headWid] = sizeParams(sizeRef.current);
 
       ghostRef.current.shaft.setLatLngs([startRef.current, end]);
       const pts = arrowheadPoints(map, startRef.current, end, headLen, headWid);
@@ -284,8 +290,13 @@ export default function ArrowControl() {
         map, start, end, color, weight, headLen, headWid, true,
       );
 
-      // Click on arrow → show "click to delete" popup
-      group.on('click', () => {
+      // Click on arrow → delete mode removes immediately, otherwise show popup
+      group.on('click', (ev) => {
+        L.DomEvent.stop(ev as L.LeafletMouseEvent);
+        if (deleteModeRef.current) {
+          useDrawnStore.getState().removeFeature(id);
+          return;
+        }
         const popup = L.popup({ closeButton: true, className: 'arrow-popup' })
           .setLatLng(end)
           .setContent(
