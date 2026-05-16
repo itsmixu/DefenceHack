@@ -16,6 +16,14 @@ const baseColorByLayer: Record<LayerKey, string> = {
   mcoo: '#16a34a',
 };
 
+// Cell tower colour by radio technology.
+const cellRadioColor: Record<string, string> = {
+  NR:   '#22c55e',  // 5G — green
+  LTE:  '#3b82f6',  // 4G — blue
+  UMTS: '#eab308',  // 3G — yellow
+  GSM:  '#9ca3af',  // 2G — grey
+};
+
 const exposurePalette = ['#86efac', '#fde047', '#fb923c', '#ef4444', '#7f1d1d'];
 const exposureColor = (level: number) =>
   exposurePalette[Math.min(Math.max(Math.round(level), 1), 5) - 1];
@@ -109,6 +117,27 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         opts.weight = 0.5;
         break;
       }
+      case 'opencellid': {
+        // Coverage ring polygons — dashed outline, very low fill so towers beneath stay visible.
+        const radio = String(p.radio ?? 'LTE').toUpperCase();
+        const c = cellRadioColor[radio] ?? '#3b82f6';
+        opts.color = c;
+        opts.fillColor = c;
+        opts.fillOpacity = 0.07;
+        opts.weight = 1.5;
+        opts.dashArray = '6 4';
+        break;
+      }
+      case 'n2yo': {
+        // Footprint polygon for satellites — very faint, just shows the visibility horizon.
+        const cat = String(p.category ?? '');
+        opts.color = cat === 'earth_observation' ? '#a855f7' : '#06b6d4';
+        opts.fillColor = opts.color;
+        opts.fillOpacity = 0.05;
+        opts.weight = 1;
+        opts.dashArray = '4 6';
+        break;
+      }
     }
 
     return opts;
@@ -135,22 +164,27 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       color = '#0ea5e9';
       radius = 7;
     } else if (layer === 'opencellid') {
-      color = '#3b82f6';
-      radius = 4;
+      // category="coverage" features are Polygons and go through style(), not here.
+      // Only Point features (category="tower") reach pointToLayer.
+      const radio = String(p.radio ?? 'LTE').toUpperCase();
+      color = cellRadioColor[radio] ?? '#3b82f6';
+      radius = 7;
     } else if (layer === 'n2yo') {
+      // feature_type="footprint" features are Polygons handled by style().
+      // Only feature_type="position" Points reach here.
       const cat = String(p.category ?? '');
       if (cat === 'earth_observation') color = '#a855f7';
       else if (cat === 'weather') color = '#06b6d4';
       else color = '#6b7280';
-      radius = 6;
+      radius = 7;
     }
 
     return L.circleMarker(latlng, {
       radius,
-      color,
-      weight: 1.5,
+      color: '#fff',       // white border makes dots pop on any background
+      weight: 2,
       fillColor: color,
-      fillOpacity: 0.7,
+      fillOpacity: 0.9,
     });
   };
 
@@ -172,6 +206,52 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       lyr.bindPopup(html);
       return;
     }
+
+    if (layer === 'opencellid' && props.category === 'tower') {
+      const radio = String(props.radio ?? 'LTE').toUpperCase();
+      const radiusM = Number(props.radius_m ?? 0);
+      const radiusKm = (radiusM / 1000).toFixed(0);
+      const color = cellRadioColor[radio] ?? '#3b82f6';
+      const gen = radio === 'NR' ? '5G' : radio === 'LTE' ? '4G' : radio === 'UMTS' ? '3G' : '2G';
+      const signal = props.signal_strength != null ? `${props.signal_strength} dBm` : '—';
+      lyr.bindPopup(`
+        <div style="font-size:11px;line-height:1.6;min-width:160px">
+          <div style="font-weight:700;margin-bottom:4px">
+            <span style="background:${color};color:#fff;padding:1px 6px;border-radius:3px">${gen} ${radio}</span>
+            Cell tower
+          </div>
+          <div><span style="color:#64748b">Est. range</span>: <strong>~${radiusKm} km</strong></div>
+          <div><span style="color:#64748b">Avg signal</span>: <strong>${signal}</strong></div>
+          ${props.mcc != null ? `<div><span style="color:#64748b">MCC/MNC</span>: <strong>${props.mcc}/${props.mnc}</strong></div>` : ''}
+          ${props.samples != null ? `<div><span style="color:#64748b">Samples</span>: <strong>${props.samples}</strong></div>` : ''}
+          <div style="margin-top:4px;color:#94a3b8;font-size:10px">Coverage ring = estimated — varies with terrain</div>
+        </div>
+      `);
+      return;
+    }
+
+    if (layer === 'opencellid') return; // coverage polygons don't need their own popup
+
+    if (layer === 'n2yo' && props.feature_type === 'position') {
+      const cat = String(props.category ?? '');
+      const catLabel = cat === 'earth_observation' ? '🛰 Earth Observation' : cat === 'weather' ? '🌦 Weather' : '🛰 Satellite';
+      const alt = props.altitude_km != null ? `${Number(props.altitude_km).toFixed(0)} km` : '—';
+      const fp = props.footprint_radius_km != null ? `~${Number(props.footprint_radius_km).toFixed(0)} km` : '—';
+      lyr.bindPopup(`
+        <div style="font-size:11px;line-height:1.6;min-width:160px">
+          <div style="font-weight:700;margin-bottom:4px">${catLabel}</div>
+          <div><span style="color:#64748b">Name</span>: <strong>${props.satname ?? '—'}</strong></div>
+          <div><span style="color:#64748b">Altitude</span>: <strong>${alt}</strong></div>
+          <div><span style="color:#64748b">Footprint radius</span>: <strong>${fp}</strong></div>
+          ${props.cospar_id ? `<div><span style="color:#64748b">COSPAR</span>: <strong>${props.cospar_id}</strong></div>` : ''}
+          ${props.launch_date ? `<div><span style="color:#64748b">Launched</span>: <strong>${props.launch_date}</strong></div>` : ''}
+          <div style="margin-top:4px;color:#94a3b8;font-size:10px">Footprint = visibility horizon. Imaging swath is narrower.</div>
+        </div>
+      `);
+      return;
+    }
+
+    if (layer === 'n2yo') return; // footprint polygons — no popup
 
     const entries = Object.entries(props)
       .filter(([k]) => k !== 'source')
