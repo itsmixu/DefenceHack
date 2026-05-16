@@ -22,13 +22,13 @@ export default function SidePanel() {
   const [tab, setTab] = useState<Tab>('layers');
 
   return (
-    <div className="flex h-full flex-col border-l border-white/10 bg-[#111111]/92 text-white">
-      <header className="border-b border-white/10 px-4 py-3">
-        <h1 className="text-sm font-black uppercase tracking-[0.14em] text-white">61N IPB Tool</h1>
-        <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">DefenceHack — Junction</p>
+    <div className="flex h-full flex-col border-l text-white" style={{ background: '#131313', borderColor: '#393939' }}>
+      <header className="border-b px-4 py-3" style={{ borderColor: '#393939' }}>
+        <h1 className="font-mono text-[13px] font-black uppercase tracking-[0.18em] text-white">61N IPB Tool</h1>
+        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">DefenceHack — Junction</p>
       </header>
 
-      <nav className="grid grid-cols-6 border-b border-white/10 text-[9px] uppercase tracking-[0.12em]">
+      <nav className="grid grid-cols-6 border-b text-[9px] uppercase tracking-[0.12em]" style={{ borderColor: '#393939' }}>
         {TABS.map((t) => (
           <TabBtn
             key={t.id}
@@ -63,11 +63,12 @@ function TabBtn({ active, onClick, icon, label }: TabProps) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 transition ${
-        active
-          ? 'border-b border-white bg-white text-black shadow-[inset_0_-1px_0_rgba(255,255,255,0.9)]'
-          : 'text-white/60 hover:bg-white/[0.06] hover:text-white'
-      }`}
+      className="flex flex-col items-center justify-center gap-0.5 px-1 py-2 font-mono transition"
+      style={{
+        background: active ? '#ffffff' : 'transparent',
+        color: active ? '#131313' : 'rgba(255,255,255,0.50)',
+        borderBottom: active ? '2px solid #ffffff' : '2px solid transparent',
+      }}
     >
       {icon}
       <span>{label}</span>
