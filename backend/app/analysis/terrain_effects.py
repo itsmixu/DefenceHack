@@ -48,7 +48,7 @@ from ..registry import PROVIDERS
 
 
 async def build_terrain_effects(bbox: BBox, t: datetime | None) -> dict[str, Any]:
-    sources = ["mml", "digiroad", "osm", "fmi", "exposure", "opencellid", "n2yo"]
+    sources = ["mml", "digiroad", "osm", "fmi", "exposure", "opencellid", "starlink"]
     results = await asyncio.gather(
         *[PROVIDERS[s].fetch(bbox, t) for s in sources if s in PROVIDERS],
         return_exceptions=True,
@@ -252,8 +252,8 @@ async def build_terrain_effects(bbox: BBox, t: datetime | None) -> dict[str, Any
             "rationale": protection_reason,
             "key_factors": [
                 f"environment: {env_rating.replace('_', ' ')} — {env_reason}",
-                f"satellites overhead: {len(by_source.get('n2yo', []))}"
-                if by_source.get("n2yo") else "no satellite-overhead data",
+                f"starlink overhead: {len(by_source.get('starlink', []))}"
+                if by_source.get("starlink") else "no satellite-overhead data",
             ],
         },
     }

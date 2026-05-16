@@ -20,7 +20,7 @@ const LAYERS: LayerEntry[] = [
   { id: 'fmi_forecast', label: 'Forecast', hint: 'FMI HARMONIE 48 h NWP' },
   { id: 'syke', label: 'SYKE', hint: 'flood zones & Natura 2000' },
   { id: 'opencellid', label: 'Cell towers', hint: 'OpenCelliD' },
-  { id: 'n2yo', label: 'Satellites', hint: 'overpass schedule' },
+  { id: 'starlink', label: 'Starlink', hint: 'LEO constellation (live)' },
   { id: 'astronomy', label: 'Astronomy', hint: 'sun / moon / twilight' },
   { id: 'exposure', label: 'Exposure', hint: 'danger zones' },
   { id: 'mcoo', label: 'MCOO', hint: 'go / slow-go / no-go' },

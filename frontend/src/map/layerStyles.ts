@@ -13,7 +13,7 @@ const baseColorByLayer: Record<LayerKey, string> = {
   fmi_forecast: '#38bdf8',
   syke: '#2563eb',
   opencellid: '#3b82f6',
-  n2yo: '#9333ea',
+  starlink: '#9333ea',
   astronomy: '#fbbf24',
   exposure: '#dc2626',
   mcoo: '#16a34a',
@@ -131,12 +131,11 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         opts.dashArray = '6 4';
         break;
       }
-      case 'n2yo': {
-        // Footprint polygon for satellites — very faint, just shows the visibility horizon.
-        const cat = String(p.category ?? '');
-        opts.color = cat === 'earth_observation' ? '#a855f7' : '#06b6d4';
-        opts.fillColor = opts.color;
-        opts.fillOpacity = 0.05;
+      case 'starlink': {
+        // Footprint polygon — very faint horizon circle showing coverage area.
+        opts.color = '#a855f7';
+        opts.fillColor = '#a855f7';
+        opts.fillOpacity = 0.04;
         opts.weight = 1;
         opts.dashArray = '4 6';
         break;
@@ -201,12 +200,11 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       const radio = String(p.radio ?? 'LTE').toUpperCase();
       color = cellRadioColor[radio] ?? '#3b82f6';
       radius = 7;
-    } else if (layer === 'n2yo') {
-      const cat = String(p.category ?? '');
-      if (cat === 'earth_observation') color = '#a855f7';
-      else if (cat === 'weather') color = '#06b6d4';
-      else color = '#6b7280';
-      radius = 7;
+    } else if (layer === 'starlink') {
+      // Elevation angle → colour: high overhead = bright purple, near-horizon = dim
+      const elev = Number(p.elevation_deg ?? 0);
+      color = elev > 45 ? '#d946ef' : elev > 20 ? '#a855f7' : '#7c3aed';
+      radius = elev > 45 ? 8 : 6;
     } else if (layer === 'astronomy') {
       // One point per day at bbox centroid — colour by night ops rating.
       const rating = String(p.night_ops_rating ?? '');
@@ -270,26 +268,28 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
 
     if (layer === 'opencellid') return; // coverage polygons don't need their own popup
 
-    if (layer === 'n2yo' && props.feature_type === 'position') {
-      const cat = String(props.category ?? '');
-      const catLabel = cat === 'earth_observation' ? '🛰 Earth Observation' : cat === 'weather' ? '🌦 Weather' : '🛰 Satellite';
-      const alt = props.altitude_km != null ? `${Number(props.altitude_km).toFixed(0)} km` : '—';
-      const fp = props.footprint_radius_km != null ? `~${Number(props.footprint_radius_km).toFixed(0)} km` : '—';
+    if (layer === 'starlink' && props.feature_type === 'position') {
+      const alt   = props.altitude_km  != null ? `${Number(props.altitude_km).toFixed(0)} km`  : '—';
+      const elev  = props.elevation_deg != null ? `${Number(props.elevation_deg).toFixed(1)}°`  : '—';
+      const speed = props.speed_kmh     != null ? `${Number(props.speed_kmh / 1000).toFixed(1)} km/s` : '—';
+      const fp    = props.footprint_radius_km != null ? `~${Number(props.footprint_radius_km).toFixed(0)} km` : '—';
+      const incl  = props.inclination_deg    != null ? `${Number(props.inclination_deg).toFixed(1)}°`  : '—';
       lyr.bindPopup(`
-        <div style="font-size:11px;line-height:1.6;min-width:160px">
-          <div style="font-weight:700;margin-bottom:4px">${catLabel}</div>
-          <div><span style="color:#64748b">Name</span>: <strong>${props.satname ?? '—'}</strong></div>
+        <div style="font-size:11px;line-height:1.6;min-width:185px">
+          <div style="font-weight:700;margin-bottom:4px">🛰 ${props.satname ?? 'Starlink'}</div>
+          <div><span style="color:#64748b">NORAD ID</span>: <strong>${props.norad_id ?? '—'}</strong></div>
           <div><span style="color:#64748b">Altitude</span>: <strong>${alt}</strong></div>
-          <div><span style="color:#64748b">Footprint radius</span>: <strong>${fp}</strong></div>
-          ${props.cospar_id ? `<div><span style="color:#64748b">COSPAR</span>: <strong>${props.cospar_id}</strong></div>` : ''}
-          ${props.launch_date ? `<div><span style="color:#64748b">Launched</span>: <strong>${props.launch_date}</strong></div>` : ''}
-          <div style="margin-top:4px;color:#94a3b8;font-size:10px">Footprint = visibility horizon. Imaging swath is narrower.</div>
+          <div><span style="color:#64748b">Elevation</span>: <strong>${elev}</strong></div>
+          <div><span style="color:#64748b">Speed</span>: <strong>${speed}</strong></div>
+          <div><span style="color:#64748b">Coverage radius</span>: <strong>${fp}</strong></div>
+          <div><span style="color:#64748b">Inclination</span>: <strong>${incl}</strong></div>
+          <div style="margin-top:4px;color:#94a3b8;font-size:10px">Coverage circle = horizon-to-horizon visibility. Source: Celestrak TLE / SGP4.</div>
         </div>
       `);
       return;
     }
 
-    if (layer === 'n2yo') return;
+    if (layer === 'starlink') return;
 
     if (layer === 'astronomy') {
       const p = props as Record<string, unknown>;

@@ -32,7 +32,7 @@ function MapHandle() {
 const ALL_LAYERS: LayerKey[] = [
   'osm', 'digiroad', 'mml', 'mml_contours', 'statfin',
   'syke', 'fmi', 'fmi_forecast', 'astronomy',
-  'opencellid', 'n2yo', 'exposure', 'mcoo',
+  'opencellid', 'starlink', 'exposure', 'mcoo',
 ];
 
 export default function MapView() {
