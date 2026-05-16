@@ -6,6 +6,8 @@
 # --- data (see data/README.md) ---
 data/cache/
 data/raw/
+data/plans/
+data/operations/
 data/**/*.geojson
 data/**/*.gpkg
 data/**/*.shp

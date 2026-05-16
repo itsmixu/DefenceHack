@@ -143,8 +143,9 @@ DefenceHack/
     └── raw/                   # one-off downloads (Digiroad GeoPackage, etc.)
 ```
 
-`data/cache/` and `data/raw/` are **gitignored**. Never commit downloaded
-datasets, API keys, or generated GeoJSON.
+`data/cache/`, `data/raw/`, `data/plans/`, and `data/operations/` are all
+**gitignored**. Never commit downloaded datasets, API keys, generated
+GeoJSON, or saved plans/operation records.
 
 ---
 
@@ -187,13 +188,64 @@ last_checked, reason? }`.
 ### Frontend layer contract
 
 Every layer component takes `{ bbox, time }` and renders itself when
-toggled. Drawn shapes live in a separate Zustand store and are **not**
-persisted to the backend in v1 (v2 may POST them for spatial analysis).
+toggled. Drawn shapes are persisted by POSTing to `/api/plans` (see
+§Planning & operations API below).
+
+### Planning & operations API
+
+These endpoints support the "history past / predictions vs real life"
+feature from the project whiteboard. No GeoJSON — plain JSON.
+
+**Plans** — saved map states (drawn shapes + active layers + notes):
+```
+POST   /api/plans          body: { name, bbox, drawn_features, active_layers, notes, role? }
+GET    /api/plans          → list (drawn_features omitted for brevity)
+GET    /api/plans/{id}     → full plan including drawn_features
+PUT    /api/plans/{id}     body: same as POST — replaces the plan
+DELETE /api/plans/{id}
+```
+
+`drawn_features` is a GeoJSON FeatureCollection of whatever the user
+drew with geoman. `active_layers` is an array of source IDs
+(e.g. `["mml", "mml_contours", "exposure", "digiroad"]`).
+
+**Operations** — prediction + actual outcome records:
+```
+POST   /api/operations               body: { name, plan_id?, bbox,
+                                             prediction: { notes, threat_assessment, expected_outcome },
+                                             tags? }
+GET    /api/operations?plan_id=…     → list all (or filter by plan)
+GET    /api/operations/{id}
+PATCH  /api/operations/{id}/actual   body: { notes, outcome, recorded_at? }
+```
+
+Workflow: before the op create a record with `prediction` filled in;
+after it completes PATCH `/actual` with what really happened. The
+history view diffs the two.
+
+Storage: JSON files under `data/plans/` and `data/operations/`
+(gitignored, local to the demo machine). No database required.
+
+### Computed / derived layers
+
+Two layers that are not raw data feeds but server-side computations:
+
+**`mml_contours`** — elevation contour lines from MML Maastotietokanta
+WFS (feature type `Korkeusviiva`). Each LineString has `elevation_m`
+and `contour_type` ("index" every 25 m, "intermediate" every 5 m).
+Override feature type name with `MML_LAYER_CONTOUR` env var.
+
+**`exposure`** — terrain danger-zone scoring. Combines MML terrain
+polygons and OSM land-use data to assign a `danger_level` (1 = safe /
+hard cover, 5 = fully exposed) and `reason` string to every feature.
+Render as a green-to-red choropleth. Answers "what forces can do and
+what is possible" from the project goals. MML terrain is skipped if
+`MML_API_KEY` is absent (OSM land-use still runs).
 
 ### Naming
 
-- Source IDs are lowercase, no spaces: `mml`, `fmi`, `digiroad`, `statfin`,
-  `opencellid`, `n2yo`, `osm`.
+- Source IDs are lowercase, no spaces: `mml`, `mml_contours`, `fmi`,
+  `digiroad`, `statfin`, `opencellid`, `n2yo`, `osm`, `exposure`.
 - React components: `PascalCase`. Files match component name.
 - Python modules and functions: `snake_case`.
 
