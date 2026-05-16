@@ -7,6 +7,10 @@
  *   • The symbol stays "pending" so the user can place multiple copies
  *   • The placed symbol is stored in useDrawnStore as a Point feature
  *
+ * Draggable markers: placed markers can be dragged; dragend updates the store.
+ *
+ * Delete mode: when isDeleteMode is true, clicking a marker removes it immediately.
+ *
  * Syncs deletions: subscribes to useDrawnStore so markers are removed from
  * the map when deleted from the DrawnList panel.
  *
@@ -22,13 +26,17 @@ import type { DrawnFeature } from '../api/types';
 
 const SYMBOL_SIZE = 40; // px — rendered icon size
 
-function makeMilIcon(sidc: string, size = SYMBOL_SIZE): L.DivIcon {
-  const sym = new ms.Symbol(sidc, {
+function makeMilIcon(sidc: string, size = SYMBOL_SIZE, label?: string): L.DivIcon {
+  const options: Record<string, unknown> = {
     size,
     frame: true,
     fill: true,
     infoFields: false,
-  });
+  };
+  if (label) {
+    options.uniqueDesignation = label;
+  }
+  const sym = new ms.Symbol(sidc, options);
   const svg = sym.asSVG();
   const { width, height } = sym.getSize();
   const anchor = sym.getAnchor();
@@ -44,9 +52,12 @@ function makeMilIcon(sidc: string, size = SYMBOL_SIZE): L.DivIcon {
 export default function SymbolControl() {
   const map = useMap();
   const pendingSymbol = useTacticalStore((s) => s.pendingSymbol);
-  const markersRef = useRef<Map<string, L.Marker>>(new Map());
-  const pendingRef = useRef(pendingSymbol);
-  pendingRef.current = pendingSymbol;
+  const isDeleteMode  = useTacticalStore((s) => s.isDeleteMode);
+  const markersRef    = useRef<Map<string, L.Marker>>(new Map());
+  const pendingRef    = useRef(pendingSymbol);
+  const deleteModeRef = useRef(isDeleteMode);
+  pendingRef.current    = pendingSymbol;
+  deleteModeRef.current = isDeleteMode;
 
   // ── Cursor ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -58,14 +69,34 @@ export default function SymbolControl() {
     function onClick(e: L.LeafletMouseEvent) {
       const sym = pendingRef.current;
       if (!sym) return;
+      if (deleteModeRef.current) return;
       L.DomEvent.stop(e);
 
       const { lat, lng } = e.latlng;
       const id = `symbol-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
-      const icon = makeMilIcon(sym.sidc);
 
-      const marker = L.marker([lat, lng], { icon, draggable: false })
-        .addTo(map);
+      const customLabel = sym.isCustom && sym.customName ? sym.customName : undefined;
+      const icon = makeMilIcon(sym.sidc, SYMBOL_SIZE, customLabel);
+
+      const marker = L.marker([lat, lng], { icon, draggable: true }).addTo(map);
+
+      // Draggable: update store on dragend
+      marker.on('dragend', () => {
+        const newLatLng = marker.getLatLng();
+        useDrawnStore.getState().updateFeature(id, {
+          geometry: { type: 'Point', coordinates: [newLatLng.lng, newLatLng.lat] },
+        });
+      });
+
+      // Click handler: delete mode or popup
+      marker.on('click', (ev) => {
+        L.DomEvent.stop(ev);
+        if (deleteModeRef.current) {
+          useDrawnStore.getState().removeFeature(id);
+          return;
+        }
+        // Show popup (already bound below, leaflet handles it)
+      });
 
       // Popup with delete button
       marker.bindPopup(
@@ -96,6 +127,7 @@ export default function SymbolControl() {
           sidc: sym.sidc,
           name: sym.name,
           category: sym.category,
+          customName: customLabel ?? null,
         },
       };
       useDrawnStore.getState().addFeature(feature);
@@ -131,13 +163,27 @@ export default function SymbolControl() {
         if (f.geometry.type !== 'Point') return;
 
         const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
-        const sidc = String(f.properties.sidc ?? 'SFGPUCI----D---');
-        const name = String(f.properties.name ?? 'Symbol');
-        const category = String(f.properties.category ?? '');
+        const sidc       = String(f.properties.sidc ?? 'SFGPUCI----D---');
+        const name       = String(f.properties.name ?? 'Symbol');
+        const category   = String(f.properties.category ?? '');
+        const customName = f.properties.customName ? String(f.properties.customName) : undefined;
 
-        const icon = makeMilIcon(sidc);
-        const marker = L.marker([lat, lng], { icon })
-          .addTo(map);
+        const icon   = makeMilIcon(sidc, SYMBOL_SIZE, customName);
+        const marker = L.marker([lat, lng], { icon, draggable: true }).addTo(map);
+
+        marker.on('dragend', () => {
+          const newLatLng = marker.getLatLng();
+          useDrawnStore.getState().updateFeature(id, {
+            geometry: { type: 'Point', coordinates: [newLatLng.lng, newLatLng.lat] },
+          });
+        });
+
+        marker.on('click', (ev) => {
+          L.DomEvent.stop(ev);
+          if (deleteModeRef.current) {
+            useDrawnStore.getState().removeFeature(id);
+          }
+        });
 
         marker.bindPopup(
           `<div style="font-size:11px;line-height:1.6;min-width:160px">
