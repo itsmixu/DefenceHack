@@ -379,52 +379,80 @@ Replace the live layer data with `layers[sourceId]` — one atomic update so all
 
 ### Planning & history
 
-**Task 24 — Save plan button**  
-In the side panel, "Save plan" button that POSTs to `/api/plans` with the current bbox, drawn features (from drawnFeaturesStore), active layers, and a user-provided name. Show success toast.
+> **API client functions are already written** — import from `src/api/client.ts`:
+> `listPlans`, `getPlan`, `createPlan`, `updatePlan`, `deletePlan`,
+> `listPlanVersions`, `getPlanVersion`, `createPlanVersion`
+> Types are in `src/api/types.ts`: `Plan`, `PlanSummary`, `PlanVersion`, `PlanVersionSummary`.
 
-**Task 24b — Plan version snapshots (learning material)**
+---
 
-Experienced commanders can save named, immutable checkpoints so trainees can scrub through how a plan evolved. Each snapshot captures the exact map state at that moment.
+**Task 24 — Plans tab in the side panel**
 
-**Save a version:**
-```
-POST /api/plans/{id}/versions
-{
-  "label":             "Initial planning",     // human name shown in the timeline
-  "role":              "commander",             // who saved it
-  "bbox":              [24.5, 60.1, 25.5, 60.5],
-  "drawn_features":    { <GeoJSON FeatureCollection of AOI/NAI/TAI/DP shapes> },
-  "active_layers":     ["fmi", "osm", "mcoo"],
-  "notes":             "Threat assessment: ...",
-  "conditions_snapshot": {                     // optional: capture live data context
-    "fmi":       { <last FMI response> },
-    "astronomy": { <last astronomy response> }
-  }
-}
-```
-Suggested save points: "Initial planning", "After recon", "Commander review", "Final approved".
+Add a fourth tab "Plans" to `SidePanel.tsx` (after "Drawn"). The tab has two sections: **Save** and **Browse**.
 
-**List versions (for the trainee's timeline):**
-```
-GET /api/plans/{id}/versions
-→ [ { version, label, role, saved_at, bbox, active_layers, notes }, … ]   // oldest first
+#### Section A — Save current state
+
+Two buttons side by side:
+
+**"Save plan"** — prompts for a plan name, then:
+```typescript
+import { createPlan } from '../api/client';
+import { useDrawnStore, useBboxStore, useLayerStore } from '../store';
+
+const drawn = useDrawnStore.getState().features;   // GeoJSON FeatureCollection
+const bbox  = useBboxStore.getState().bbox;         // [w,s,e,n]
+const active = Object.keys(useLayerStore.getState().active)
+                 .filter(k => useLayerStore.getState().active[k]);
+
+const plan = await createPlan({ name, bbox, drawn_features: {type:'FeatureCollection',features:drawn}, active_layers: active });
+// store plan.id in local state so "Save version" knows which plan to attach to
 ```
 
-**Load a specific version:**
-```
-GET /api/plans/{id}/versions/{version}
-→ { …full snapshot including drawn_features and conditions_snapshot… }
+**"Save version"** (only enabled after a plan exists) — prompts for a label like "Initial planning" / "After recon" / "Final approved", then:
+```typescript
+import { createPlanVersion } from '../api/client';
+
+await createPlanVersion(currentPlanId, {
+  label,
+  role: currentRole,   // from role selector (Task 29), or default "commander"
+  bbox,
+  drawn_features: { type: 'FeatureCollection', features: drawn },
+  active_layers: active,
+  notes: currentNotes,
+  // optional: pass last fetched layer responses here for conditions context
+});
 ```
 
-**UX:**
-- Add a "Save version" button next to "Save plan". On click, prompt for a label.
-- In the Saved Plans sidebar, show a "Versions" expander per plan. Each version is a row: label + role + timestamp.
-- Click a version row to restore that map state (drawn_features + active_layers + notes) — **without overwriting the current live map state** (keep it in a local "live" buffer).
-- Show a diff indicator: version N vs N+1 — count of shapes added/removed.
-- Trainees should be able to view all versions but not save new ones (gate by role).
+Suggested label presets to show as quick-pick buttons: `Initial planning` / `After recon` / `Commander review` / `Final approved`.
 
-**Task 25 — Saved plans sidebar**  
-List of saved plans from `GET /api/plans`. Click a plan to restore bbox, drawn features, and active layers. Delete button per row.
+#### Section B — Browse saved plans
+
+```typescript
+import { listPlans, getPlan, deletePlan } from '../api/client';
+```
+
+Render as a list. Each row shows: plan name + date. Two buttons: **Load** and **Delete**.
+
+**Load** calls `getPlan(id)` and restores:
+- `useDrawnStore.setState({ features: plan.drawn_features.features })`
+- `useLayerStore` — toggle layers to match `plan.active_layers`
+- Fly map to `plan.bbox` if set
+
+Below each plan row, a collapsible **"Versions (N)"** expander.
+
+#### Section C — Version viewer (inside the expander)
+
+```typescript
+import { listPlanVersions, getPlanVersion } from '../api/client';
+```
+
+List versions oldest-first. Each row: `[version number] label — role — timestamp`.
+
+Click a version row → load that snapshot the same way as a plan load. Show a visual "viewing version N of M" banner at the top of the map so it's clear the user is in history mode, not live editing. Add an **"Exit history mode"** button that restores the pre-history live state.
+
+**Diff indicator between adjacent versions:** count `drawn_features.features.length` difference and show `+2 shapes / -1 shape` between rows.
+
+**Task 25 — (merged into Task 24 Section B above)**
 
 **Task 26 — New operation flow**  
 Form to create an operation:  
