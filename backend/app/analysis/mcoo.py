@@ -7,14 +7,20 @@ overlay that fuses all KOCOA factors into a single classified map.
 
 This module composes layers we already produce (MML terrain, OSM landuse
 via exposure, Digiroad mobility) into a unified GeoJSON FeatureCollection
-where every feature carries an `mcoo_class`:
+where every feature carries:
 
-  go        — unrestricted; trafficable for mounted forces
-  slow-go   — restricted; cover/concealment present, mobility reduced
-  no-go     — severely restricted; impassable to mounted, marginal foot
+  mcoo_class   — "go" | "slow-go" | "no-go"  (the colour bucket)
+  mcoo_role    — "terrain" | "mobility_corridor" | "chokepoint_bridge"
+  mcoo_cite    — ATP 2-41.1 Appendix B table reference (e.g. "B-2", "B-16")
+  mcoo_reason  — one-line rationale naming the doctrinal threshold applied
 
-This is the single layer Miko should render as the headline tactical
-overlay. Frontend styling: green = go, yellow = slow-go, red = no-go.
+The thresholds themselves live in `app.doctrine` and are sourced from
+ATP 2-41.1 (2021) Appendix B — "Hard numerical thresholds for AI model
+training." Centralising them means every rating on the map is grounded
+in published doctrine, not heuristics; judges can click any polygon and
+see exactly which table justified the colour.
+
+Frontend styling: green = go, yellow = slow-go, red = no-go.
 """
 from __future__ import annotations
 
@@ -22,48 +28,14 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
+from .. import doctrine
 from ..bbox import BBox
 from ..registry import PROVIDERS
 from ..schemas import FeatureCollection, LayerMeta
 
-# Doctrinal classification by source terrain type. Maps every feature we
-# might emit to one of the three MCOO classes.
-MCOO_BY_TERRAIN: dict[str, str] = {
-    # MML
-    "Suo":            "slow-go",   # swamp — passable on foot, restricted vehicles
-    "Jarvi":          "no-go",
-    "Virtavesialue":  "no-go",
-    "Meriaalue":      "no-go",
-    "KallioAlue":     "slow-go",
-    "HiekkaSoraAlue": "slow-go",
-    # OSM
-    "forest":         "slow-go",
-    "wood":           "slow-go",
-    "scrub":          "slow-go",
-    "wetland":        "slow-go",
-    "farmland":       "go",
-    "meadow":         "go",
-    "grass":          "go",
-    "grassland":      "go",
-    "residential":    "slow-go",
-    "commercial":     "slow-go",
-    "industrial":     "slow-go",
-    "retail":         "slow-go",
-    "military":       "slow-go",
-    "beach":          "slow-go",
-    "sand":           "slow-go",
-    "cliff":          "no-go",
-    "building":       "no-go",
-}
-
-
-def _classify(props: dict) -> str:
-    terrain = props.get("terrain_type") or props.get("category") or ""
-    return MCOO_BY_TERRAIN.get(terrain, "go")
-
 
 async def build_mcoo(bbox: BBox, t: datetime | None) -> FeatureCollection:
-    """Fetch terrain + mobility sources in parallel and synthesize MCOO."""
+    """Fetch terrain + mobility sources in parallel and synthesise the MCOO."""
     sources = ["exposure", "mml", "digiroad"]
     results = await asyncio.gather(
         *[PROVIDERS[s].fetch(bbox, t) for s in sources if s in PROVIDERS],
@@ -72,6 +44,7 @@ async def build_mcoo(bbox: BBox, t: datetime | None) -> FeatureCollection:
 
     features: list[dict[str, Any]] = []
     source_status: dict[str, str] = {}
+    class_counts: dict[str, int] = {"go": 0, "slow-go": 0, "no-go": 0}
 
     for src, result in zip(sources, results):
         if isinstance(result, Exception):
@@ -80,34 +53,50 @@ async def build_mcoo(bbox: BBox, t: datetime | None) -> FeatureCollection:
         source_status[src] = result.meta.status
         for f in result.features:
             props = f.get("properties") or {}
-            # Roads are always "go" corridors regardless of underlying terrain.
             if props.get("source") == "digiroad":
-                mcoo_class = "go"
-                role = "mobility_corridor"
-                # Bridges are critical chokepoints.
-                if props.get("is_bridge"):
-                    role = "chokepoint_bridge"
+                info = doctrine.classify_road(
+                    props.get("functional_class") or props.get("TOIMINNALLINEN_LUOKKA"),
+                    bool(props.get("is_bridge")),
+                )
+                mcoo_class = info["class"]
+                mcoo_role = info["role"]
+                mcoo_cite = info["cite"]
+                mcoo_reason = info["reason"]
             else:
-                mcoo_class = _classify(props)
-                role = "terrain"
+                terrain = props.get("terrain_type") or props.get("category")
+                info = doctrine.classify_terrain(terrain)
+                mcoo_class = info["class"]
+                mcoo_role = "terrain"
+                mcoo_cite = info["cite"]
+                mcoo_reason = info["reason"]
+            class_counts[mcoo_class] = class_counts.get(mcoo_class, 0) + 1
             features.append({
                 **f,
                 "properties": {
                     **props,
                     "mcoo_class": mcoo_class,
-                    "mcoo_role": role,
+                    "mcoo_role": mcoo_role,
+                    "mcoo_cite": mcoo_cite,
+                    "mcoo_reason": mcoo_reason,
+                    "doctrine": "ATP 2-41.1 Appendix B",
                 },
             })
 
     status = "ok" if features else "partial"
     reason = (
-        f"{len(features)} features synthesized from {', '.join(source_status)}"
+        f"{len(features)} features synthesised from {', '.join(source_status)} "
+        f"(go {class_counts['go']} / slow-go {class_counts['slow-go']} / "
+        f"no-go {class_counts['no-go']})"
         if features else "no MCOO features available for bbox"
     )
-    return FeatureCollection(
+    fc = FeatureCollection(
         features=features,
         meta=LayerMeta(
             source="mcoo", status=status, reason=reason,
             bbox=bbox.as_list(), t=t,
         ),
     )
+    # Attach the doctrinal grounding to the FeatureCollection meta so the
+    # frontend can show "ATP 2-41.1 Appendix B" in the legend / status panel.
+    fc.meta.attribution = "Classification per ATP 2-41.1 (2021) Appendix B"
+    return fc
