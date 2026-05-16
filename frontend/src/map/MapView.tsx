@@ -16,6 +16,7 @@ import {
   useTimelineStore,
 } from '../store';
 import type { LayerKey } from '../api/types';
+import { TIME_AWARE_LAYERS } from './timeAware';
 
 // Registers the underlying Leaflet map instance into a Zustand store so other
 // components (zone controls, etc.) can call flyTo without prop drilling.
@@ -59,7 +60,10 @@ export default function MapView() {
   const rangeEndMs = useTimelineStore((s) => s.rangeEndMs);
   const stepMinutes = useTimelineStore((s) => s.stepMinutes);
   const selectedMs = useTimelineStore((s) => s.selectedMs);
+  const committedMs = useTimelineStore((s) => s.committedMs);
   const setSelectedMs = useTimelineStore((s) => s.setSelectedMs);
+  const commitSelected = useTimelineStore((s) => s.commitSelected);
+  const commitSelectedMs = useTimelineStore((s) => s.commitSelectedMs);
   const queryClient = useQueryClient();
   const [timelineStartMs, setTimelineStartMs] = useState(rangeStartMs);
 
@@ -70,11 +74,9 @@ export default function MapView() {
   const visibleEndMs = Math.min(rangeEndMs, visibleStartMs + timelineSpanMs);
   const sliderSteps = Math.max(1, Math.round((visibleEndMs - visibleStartMs) / stepMs));
   const sliderValue = Math.min(sliderSteps, Math.max(0, Math.round((selectedMs - visibleStartMs) / stepMs)));
-  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
-  const selectedLocal = useMemo(
-    () => new Date(selectedMs).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
-    [selectedMs],
-  );
+  // Basemap URLs key off the committed time so dragging the slider doesn't
+  // thrash tile fetches; the displayed label tracks the live thumb position.
+  const committedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
   const timelineStartInput = useMemo(() => toDatetimeLocalValue(visibleStartMs), [visibleStartMs]);
   const selectedInput = useMemo(() => toDatetimeLocalValue(selectedMs), [selectedMs]);
   const sectionTimes = useMemo(() => {
@@ -90,15 +92,16 @@ export default function MapView() {
     setTimelineStartMs(rangeStartMs);
   }, [rangeStartMs]);
 
-  // When the timeline scrubs, only clear and re-fetch time-aware layers (fmi, osm).
-  // Static layers (mml, digiroad, opencellid, etc.) retain their cache so they
-  // don't make unnecessary network requests on every slider move.
+  // When the committed time changes (slider release / input commit), drop the
+  // per-layer feature cache and invalidate react-query keys for every genuinely
+  // time-aware layer. Static layers (mml, digiroad, opencellid, etc.) are not
+  // in TIME_AWARE_LAYERS, so their caches survive timeline scrubbing.
   useEffect(() => {
-    (['fmi', 'osm'] as const).forEach((l) => {
+    TIME_AWARE_LAYERS.forEach((l) => {
       clearFeature(l);
       queryClient.invalidateQueries({ queryKey: ['layer', l] });
     });
-  }, [selectedMs, clearFeature, queryClient]);
+  }, [committedMs, clearFeature, queryClient]);
 
   const loadingLayers = useMemo(
     () => ALL_LAYERS.filter((id) => active[id] && loading[id]),
@@ -141,12 +144,38 @@ export default function MapView() {
 
   return (
     <div className="relative h-full w-full">
-      <MapContainer center={[64, 25]} zoom={5} className="h-full w-full">
+      <MapContainer
+        center={[64, 25]}
+        zoom={5}
+        minZoom={4}
+        // Hard-clamp panning to the Finland area (with a generous margin so
+        // the user can still see the country edges + a buffer of sea/border).
+        // viscosity=1 disables the rubber-band drag-past effect.
+        maxBounds={[
+          [58.5, 17.0],
+          [71.5, 34.0],
+        ]}
+        maxBoundsViscosity={1.0}
+        worldCopyJump={false}
+        className="h-full w-full"
+      >
         {activeBasemapList.map((b) => {
-          const url = b.timeAware
-            ? `${b.url}?t=${encodeURIComponent(selectedIso)}`
-            : b.url;
-          const key = b.timeAware ? `${b.id}:${selectedIso}` : b.id;
+          // Two time-aware URL conventions:
+          //   - {date} in path → substitute with YYYY-MM-DD (NASA GIBS pattern)
+          //   - otherwise append ?t=ISO query (FMI WMS pattern)
+          let url = b.url;
+          let timeKey: string | null = null;
+          if (b.timeAware) {
+            if (url.includes('{date}')) {
+              const date = committedIso.slice(0, 10);
+              url = url.replace('{date}', date);
+              timeKey = date;
+            } else {
+              url = `${url}?t=${encodeURIComponent(committedIso)}`;
+              timeKey = committedIso;
+            }
+          }
+          const key = timeKey ? `${b.id}:${timeKey}` : b.id;
           return (
             <TileLayer
               key={key}
@@ -279,7 +308,7 @@ export default function MapView() {
                   value={selectedInput}
                   onChange={(e) => {
                     const ms = new Date(e.target.value).getTime();
-                    if (Number.isFinite(ms)) setSelectedMs(ms);
+                    if (Number.isFinite(ms)) commitSelectedMs(ms);
                   }}
                   className="rounded border border-white/20 bg-black px-1 py-0.5 text-[10px] text-white"
                 />
@@ -298,6 +327,10 @@ export default function MapView() {
               const idx = Number(e.target.value);
               setSelectedMs(visibleStartMs + idx * stepMs);
             }}
+            onPointerUp={commitSelected}
+            onMouseUp={commitSelected}
+            onTouchEnd={commitSelected}
+            onKeyUp={commitSelected}
             className="h-1 w-full accent-white"
             aria-label="Operational timeline"
           />
@@ -307,7 +340,7 @@ export default function MapView() {
               <button
                 key={`${ms}-${idx}`}
                 type="button"
-                onClick={() => setSelectedMs(ms)}
+                onClick={() => commitSelectedMs(ms)}
                 className="rounded border border-white/15 bg-[#161616] px-1 py-0.5 text-center font-mono text-[9px] uppercase tracking-[0.02em] text-white/75 hover:bg-white/[0.12]"
                 title={new Date(ms).toISOString()}
               >

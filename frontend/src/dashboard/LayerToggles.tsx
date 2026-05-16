@@ -1,7 +1,8 @@
-import { useLayerStore } from '../store';
+import { useBboxStore, useLayerStore } from '../store';
 import type { LayerKey, LayerStatus } from '../api/types';
 import { useOsmPoiFilterStore } from '../store';
 import { OSM_POI_CATEGORIES } from '../map/osmPoi';
+import { MIN_ZOOM_BY_LAYER, isLayerSuppressedByZoom } from '../map/layerLoadLimits';
 import SourceStatusList from './SourceStatusList';
 
 interface LayerEntry {
@@ -38,6 +39,7 @@ export default function LayerToggles() {
   const status = useLayerStore((s) => s.status);
   const loading = useLayerStore((s) => s.loading);
   const toggle = useLayerStore((s) => s.toggle);
+  const zoom = useBboxStore((s) => s.zoom);
   const osmEnabled = useOsmPoiFilterStore((s) => s.enabled);
   const toggleOsm = useOsmPoiFilterStore((s) => s.toggle);
   const setAllOsm = useOsmPoiFilterStore((s) => s.setAll);
@@ -51,6 +53,8 @@ export default function LayerToggles() {
       <ul className="space-y-1">
         {LAYERS.map((l) => {
           const isOsm = l.id === 'osm';
+          const minZoom = MIN_ZOOM_BY_LAYER[l.id];
+          const suppressed = !!active[l.id] && isLayerSuppressedByZoom(l.id, zoom);
           return (
             <li key={l.id} className="rounded border border-white/10 bg-black/30 px-2 py-1.5 hover:bg-white/[0.04]">
               <div className="flex items-center justify-between">
@@ -65,7 +69,14 @@ export default function LayerToggles() {
                     {l.hint && <span className="font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">{l.hint}</span>}
                   </span>
                 </label>
-                {active[l.id] && loading[l.id] ? (
+                {suppressed ? (
+                  <span
+                    className="rounded border border-amber-300/50 bg-amber-300/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-amber-200"
+                    title={`Zoom ≥ ${minZoom} to load this layer (current ${zoom ?? '?'})`}
+                  >
+                    zoom ≥ {minZoom}
+                  </span>
+                ) : active[l.id] && loading[l.id] ? (
                   <span
                     className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
                     title="loading…"

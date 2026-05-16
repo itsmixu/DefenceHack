@@ -59,6 +59,42 @@ export const OSM_POI_CATEGORIES = [
     icon: '🔌',
     color: '#ca8a04',
   },
+  {
+    id: 'airfield',
+    label: 'Airfield',
+    icon: '✈',
+    color: '#0891b2',
+  },
+  {
+    id: 'helipad',
+    label: 'Helipad',
+    icon: 'H',
+    color: '#0e7490',
+  },
+  {
+    id: 'railway',
+    label: 'Railway',
+    icon: '═',
+    color: '#475569',
+  },
+  {
+    id: 'railway_bridge',
+    label: 'Rail Bridge',
+    icon: '╪',
+    color: '#1d4ed8',
+  },
+  {
+    id: 'waterway',
+    label: 'Waterway',
+    icon: '~',
+    color: '#0284c7',
+  },
+  {
+    id: 'ford',
+    label: 'Ford',
+    icon: '≈',
+    color: '#0369a1',
+  },
 ] as const;
 
 export type OsmPoiCategory = (typeof OSM_POI_CATEGORIES)[number]['id'];

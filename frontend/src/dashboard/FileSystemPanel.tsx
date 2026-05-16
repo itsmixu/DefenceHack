@@ -571,7 +571,7 @@ export default function FileSystemPanel() {
   const injectSnapshots = useFeatureCacheStore((s) => s.injectSnapshots);
   const clearAllCache = useFeatureCacheStore((s) => s.clearAll);
   const selectedMs   = useTimelineStore((s) => s.selectedMs);
-  const setSelectedMs = useTimelineStore((s) => s.setSelectedMs);
+  const commitSelectedMs = useTimelineStore((s) => s.commitSelectedMs);
   const map          = useMapStore((s) => s.map);
 
   // UI state
@@ -657,7 +657,7 @@ export default function FileSystemPanel() {
     setAllDrawn((ph.drawn_features?.features ?? []) as DrawnFeature[]);
 
     if (ph.timeline_selected_ms != null) {
-      setSelectedMs(ph.timeline_selected_ms);
+      commitSelectedMs(ph.timeline_selected_ms);
     }
 
     if (map) {
@@ -668,7 +668,7 @@ export default function FileSystemPanel() {
         map.flyTo([ph.center[0], ph.center[1]], ph.zoom, { animate: true, duration: 0.6 });
       }
     }
-  }, [clearAllCache, injectSnapshots, setActiveLayers, setAllDrawn, setSelectedMs, map]);
+  }, [clearAllCache, injectSnapshots, setActiveLayers, setAllDrawn, commitSelectedMs, map]);
 
   // ── Open file ──────────────────────────────────────────────────────────────
 

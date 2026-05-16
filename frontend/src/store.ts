@@ -35,12 +35,16 @@ export const useBackendStatusStore = create<BackendStatusState>((set) => ({
 // ---------- Bbox state ----------
 interface BboxState {
   bbox: string | null;
+  zoom: number | null;
   setBbox: (bbox: string) => void;
+  setZoom: (zoom: number) => void;
 }
 
 export const useBboxStore = create<BboxState>((set) => ({
   bbox: null,
+  zoom: null,
   setBbox: (bbox) => set({ bbox }),
+  setZoom: (zoom) => set({ zoom }),
 }));
 
 // ---------- Timeline state ----------
@@ -54,8 +58,16 @@ interface TimelineState {
   rangeStartMs: number;
   rangeEndMs: number;
   stepMinutes: number;
+  // Live thumb position — updates on every slider onChange while dragging.
   selectedMs: number;
+  // Debounced fetch trigger — only updates on slider release / commit.
+  committedMs: number;
   setSelectedMs: (ms: number) => void;
+  // Sets selectedMs AND immediately commits — for one-shot interactions
+  // (datetime-local inputs, section buttons, programmatic moves).
+  commitSelectedMs: (ms: number) => void;
+  // Copies the current selectedMs into committedMs — for slider release.
+  commitSelected: () => void;
 }
 
 export const useTimelineStore = create<TimelineState>((set, get) => ({
@@ -63,11 +75,18 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   rangeEndMs: timelineNowMs + TIMELINE_RANGE_FUTURE_HOURS * 60 * 60 * 1000,
   stepMinutes: TIMELINE_STEP_MINUTES,
   selectedMs: timelineNowMs,
+  committedMs: timelineNowMs,
   setSelectedMs: (ms) => {
     const { rangeStartMs, rangeEndMs } = get();
     const clamped = Math.min(rangeEndMs, Math.max(rangeStartMs, ms));
     set({ selectedMs: clamped });
   },
+  commitSelectedMs: (ms) => {
+    const { rangeStartMs, rangeEndMs } = get();
+    const clamped = Math.min(rangeEndMs, Math.max(rangeStartMs, ms));
+    set({ selectedMs: clamped, committedMs: clamped });
+  },
+  commitSelected: () => set({ committedMs: get().selectedMs }),
 }));
 
 interface LayerState {

@@ -16,15 +16,8 @@ import {
   useTimelineStore,
 } from '../store';
 import { getStyleForLayer } from './layerStyles';
-
-// Only these layers genuinely return different data for different timestamps.
-// All other layers (mml, digiroad, opencellid, starlink, exposure, mcoo) are static
-// and must NOT be re-fetched when the timeline scrubber moves — doing so would
-// erase their cache and cause unnecessary network requests.
-// astronomy: computed locally by astral — any date, zero latency.
-// fmi_forecast: different forecast at different base times.
-// statfin: annual resolution — skip (same data all year, not useful to re-fetch hourly).
-const TIME_AWARE: Set<LayerKey> = new Set(['fmi', 'osm', 'astronomy', 'fmi_forecast']);
+import { isLayerSuppressedByZoom } from './layerLoadLimits';
+import { TIME_AWARE_LAYER_SET } from './timeAware';
 
 interface Props {
   layer: LayerKey;
@@ -42,6 +35,8 @@ const isBackendUnavailableError = (err: unknown): boolean => {
 
 export default function SourceLayer({ layer }: Props) {
   const bbox = useBboxStore((s) => s.bbox);
+  const zoom = useBboxStore((s) => s.zoom);
+  const suppressedByZoom = isLayerSuppressedByZoom(layer, zoom);
   const setStatus = useLayerStore((s) => s.setStatus);
   const setLoading = useLayerStore((s) => s.setLoading);
   const setBackendUnavailable = useBackendStatusStore((s) => s.setUnavailable);
@@ -50,13 +45,14 @@ export default function SourceLayer({ layer }: Props) {
   const cachedFeatures = useFeatureCacheStore((s) => s.features[layer]);
   const coveredList = useFeatureCacheStore((s) => s.covered[layer]);
   const osmEnabled = useOsmPoiFilterStore((s) => s.enabled);
-  const selectedMs = useTimelineStore((s) => s.selectedMs);
-  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
+  const committedMs = useTimelineStore((s) => s.committedMs);
+  const selectedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
 
   // Decide whether the current viewport is already covered by a previously
   // fetched bbox. If so, skip the network request and just render the cache.
   const { needsFetch, fetchBboxStr } = useMemo(() => {
     if (!bbox) return { needsFetch: false, fetchBboxStr: null as string | null };
+    if (suppressedByZoom) return { needsFetch: false, fetchBboxStr: null };
     const viewport = parseBbox(bbox);
     const covered = coveredList ?? [];
     const alreadyCovered = covered.some((b) => bboxContains(b, viewport));
@@ -64,9 +60,9 @@ export default function SourceLayer({ layer }: Props) {
     // Pre-fetch a slightly larger area so small pans stay in cache.
     const expanded = expandBbox(viewport, 0.5);
     return { needsFetch: true, fetchBboxStr: expanded.join(',') };
-  }, [bbox, coveredList]);
+  }, [bbox, coveredList, suppressedByZoom]);
 
-  const isTimeAware = TIME_AWARE.has(layer);
+  const isTimeAware = TIME_AWARE_LAYER_SET.has(layer);
 
   const query = useQuery({
     // Non-time-aware layers omit selectedIso from the key so they don't
@@ -124,7 +120,7 @@ export default function SourceLayer({ layer }: Props) {
     setBackendAvailable,
   ]);
 
-  const style = useMemo(() => getStyleForLayer(layer), [layer]);
+  const style = useMemo(() => getStyleForLayer(layer, zoom), [layer, zoom]);
 
   const collection = useMemo<FeatureCollection | null>(() => {
     if (!cachedFeatures || cachedFeatures.length === 0) return null;
@@ -137,11 +133,12 @@ export default function SourceLayer({ layer }: Props) {
     return { type: 'FeatureCollection', features: visible };
   }, [cachedFeatures, layer, osmEnabled]);
 
+  if (suppressedByZoom) return null;
   if (!collection || collection.features.length === 0) return null;
 
   return (
     <GeoJSON
-      key={`${layer}-${cachedFeatures?.length ?? 0}`}
+      key={`${layer}-${cachedFeatures?.length ?? 0}-z${zoom ?? 'na'}`}
       data={collection}
       style={style.style}
       pointToLayer={style.pointToLayer}
