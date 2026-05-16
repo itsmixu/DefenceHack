@@ -2,6 +2,7 @@ import { useLayerStore } from '../store';
 import type { LayerKey, LayerStatus } from '../api/types';
 import { useOsmPoiFilterStore } from '../store';
 import { OSM_POI_CATEGORIES } from '../map/osmPoi';
+import SourceStatusList from './SourceStatusList';
 
 interface LayerEntry {
   id: LayerKey;
@@ -116,6 +117,11 @@ export default function LayerToggles() {
           );
         })}
       </ul>
+
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">Source Status</h3>
+        <SourceStatusList />
+      </div>
     </div>
   );
 }
