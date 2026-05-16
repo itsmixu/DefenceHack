@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ClipboardList, Layers } from 'lucide-react';
 import LayerToggles from './LayerToggles';
 import DrawnList from './DrawnList';
+import PlansPanel from './PlansPanel';
 
 type Tab = 'layers' | 'drawn';
 

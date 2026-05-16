@@ -77,6 +77,8 @@ interface LayerState {
   toggle: (id: LayerKey) => void;
   setStatus: (id: LayerKey, status: LayerStatus) => void;
   setLoading: (id: LayerKey, loading: boolean) => void;
+  /** Replace the full active-layer set. Used when loading a saved plan. */
+  setActiveLayers: (ids: LayerKey[]) => void;
 }
 
 export const useLayerStore = create<LayerState>((set) => ({
@@ -89,6 +91,13 @@ export const useLayerStore = create<LayerState>((set) => ({
     set((s) => ({ status: { ...s.status, [id]: status } })),
   setLoading: (id, loading) =>
     set((s) => ({ loading: { ...s.loading, [id]: loading } })),
+  setActiveLayers: (ids) =>
+    set((s) => {
+      const next: Partial<Record<LayerKey, boolean>> = {};
+      for (const k of Object.keys(s.active) as LayerKey[]) next[k] = false;
+      for (const id of ids) next[id] = true;
+      return { active: next };
+    }),
 }));
 
 // Per-layer feature cache. Features accumulate as the user pans the map,
