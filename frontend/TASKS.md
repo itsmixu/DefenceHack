@@ -283,8 +283,64 @@ A separate "Data sources" tab showing all sources from `GET /api/sources`.
 For each source: name, description, current status (fetched from the last layer response's `meta`), and a "Fetch now" button.  
 **Judges specifically look for this transparency.**
 
-**Task 23 — Time scrubber**  
-Datetime picker at the bottom of the screen. When set, appends `?t=<ISO8601>` to all layer and analysis fetches. Lets users replay historical weather / satellite positions.
+**Task 23 — Time scrubber (use the timeline API below)**
+
+The backend provides a dedicated timeline API so you only need **one request per scrub event** instead of N parallel layer requests.
+
+#### Step 1 — on mount, fetch capabilities
+
+```
+GET /api/timeline/capabilities
+```
+
+Response:
+```json
+{
+  "time_aware_sources": ["fmi", "osm", "astronomy", "statfin"],
+  "snapshot_sources":   ["fmi", "osm", "astronomy"],
+  "oldest_supported_date": "2007-10-08",
+  "sources": {
+    "fmi":       { "time_aware": true, "min_date": "2010-01-01", "resolution": "1h", "note": "..." },
+    "osm":       { "time_aware": true, "min_date": "2007-10-08", "resolution": "1s", "note": "..." },
+    "astronomy": { "time_aware": true, "min_date": "1900-01-01", "resolution": "1s", "note": "..." },
+    "n2yo":      { "time_aware": false, "reason": "real-time only" },
+    ...
+  }
+}
+```
+
+Use `oldest_supported_date` to set the scrubber's minimum date. Grey out layer toggles whose `time_aware === false` when a past date is selected — show the `reason` in a tooltip.
+
+#### Step 2 — on each scrub event, call snapshot
+
+```
+GET /api/timeline/snapshot?bbox=WEST,SOUTH,EAST,NORTH&t=2024-01-15T12:00:00Z&sources=fmi,osm,astronomy
+```
+
+Response:
+```json
+{
+  "t":    "2024-01-15T12:00:00.000000+00:00",
+  "bbox": [24.5, 60.1, 25.5, 60.5],
+  "layers": {
+    "fmi":       { "type": "FeatureCollection", "features": [...], "meta": { "status": "ok" } },
+    "osm":       { "type": "FeatureCollection", "features": [...], "meta": { "status": "ok" } },
+    "astronomy": { "type": "FeatureCollection", "features": [...], "meta": { "status": "ok" } }
+  },
+  "source_status": { "fmi": "ok", "osm": "ok", "astronomy": "ok" },
+  "meta": { "fetch_ms": 842, "sources_requested": ["fmi","osm","astronomy"], "sources_fetched": [...] }
+}
+```
+
+Replace the live layer data with `layers[sourceId]` — one atomic update so all layers advance to the same `t`. Show `source_status` badges on each layer toggle. Show `meta.fetch_ms` as a "loaded in Xs" indicator.
+
+#### Step 3 — UX
+
+- Datetime picker + play/pause button + step ±1h buttons at the bottom of the screen.
+- While fetching, show a loading spinner and disable the scrubber.
+- When `t` is "now" (cleared), revert to the normal per-layer fetches from `/api/layers/{source}`.
+- `fmi_forecast` layer: hide automatically when `t` is in the past (check `time_aware === false` in capabilities, or `source_status[src] === "unavailable"`).
+- Debounce scrubber drag to ~300 ms before firing the snapshot request.
 
 ---
 
