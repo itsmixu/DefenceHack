@@ -197,6 +197,8 @@ export const parseBbox = (s: string): Bbox4 => {
 interface DrawnState {
   features: DrawnFeature[];
   setAll: (fs: DrawnFeature[]) => void;
+  addFeature: (f: DrawnFeature) => void;
+  removeFeature: (id: string | number) => void;
   clear: () => void;
   toCollection: () => FeatureCollection;
 }
@@ -204,6 +206,8 @@ interface DrawnState {
 export const useDrawnStore = create<DrawnState>((set, get) => ({
   features: [],
   setAll: (features) => set({ features }),
+  addFeature: (f) => set((s) => ({ features: [...s.features, f] })),
+  removeFeature: (id) => set((s) => ({ features: s.features.filter((x) => x.id !== id) })),
   clear: () => set({ features: [] }),
   toCollection: () => ({ type: 'FeatureCollection', features: get().features }),
 }));
@@ -368,13 +372,31 @@ interface TacticalState {
   pendingDrawMode: 'Polygon' | 'Polyline' | 'Marker' | null;
   setPending: (type: MilitaryFeatureType, mode: 'Polygon' | 'Polyline' | 'Marker') => void;
   clearPending: () => void;
+  // Arrow tool state
+  isArrowMode: boolean;
+  arrowColor: string;
+  arrowSize: number;   // 1–5
+  setArrowMode: (active: boolean) => void;
+  setArrowColor: (color: string) => void;
+  setArrowSize: (size: number) => void;
 }
 
 export const useTacticalStore = create<TacticalState>((set) => ({
   pendingType: null,
   pendingDrawMode: null,
-  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode }),
+  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode, isArrowMode: false }),
   clearPending: () => set({ pendingType: null, pendingDrawMode: null }),
+  isArrowMode: false,
+  arrowColor: '#ef4444',
+  arrowSize: 3,
+  setArrowMode: (isArrowMode) => set((s) => ({
+    isArrowMode,
+    // deactivate geoman when arrow mode starts
+    pendingType: isArrowMode ? null : s.pendingType,
+    pendingDrawMode: isArrowMode ? null : s.pendingDrawMode,
+  })),
+  setArrowColor: (arrowColor) => set({ arrowColor }),
+  setArrowSize: (arrowSize) => set({ arrowSize }),
 }));
 
 // ---------- OSM POI category filters (persisted) ----------

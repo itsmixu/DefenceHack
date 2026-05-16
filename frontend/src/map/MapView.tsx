@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import BboxTracker from './BboxTracker';
 import SourceLayer from './SourceLayer';
 import DrawControl from '../drawing/DrawControl';
+import ArrowControl from '../drawing/ArrowControl';
 import LayerSlots from './LayerSlots';
 import ZoneControls from './ZoneControls';
 import { basemaps } from './basemaps';
@@ -159,6 +160,7 @@ export default function MapView() {
         <MapHandle />
         <BboxTracker />
         <DrawControl />
+        <ArrowControl />
         {ALL_LAYERS.map((id) => (active[id] ? <SourceLayer key={id} layer={id} /> : null))}
       </MapContainer>
 
