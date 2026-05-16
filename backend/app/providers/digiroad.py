@@ -39,7 +39,9 @@ PROPERTIES_KEEP: tuple[str, ...] = (
     "PITUUS", "length_m",
     "NOPEUSRAJOITUS", "speed_limit",
     "PAALLYSTETTY", "surface",
-    "SILTA_ALIKULKU", "bridge_underpass",  # bridge / underpass flag
+    "SILTA_ALIKULKU", "bridge_underpass",   # bridge / underpass flag
+    "SUURIN_SALLITTU_MASSA", "load_capacity_t",  # max permitted mass in tonnes
+    "LEVEYS", "width_m",                    # road / bridge width in metres
 )
 
 
@@ -54,10 +56,18 @@ def _env_or_default(name: str, default: str) -> str:
 def _trim_properties(props: dict) -> dict:
     out = {k: props[k] for k in PROPERTIES_KEEP if k in props}
     out["source"] = "digiroad"
-    # Expose a normalized "is_bridge" flag when the Digiroad attribute is present.
+    # Normalised bridge flag.
     bu = props.get("SILTA_ALIKULKU") or props.get("bridge_underpass")
     if bu is not None:
         out["is_bridge"] = str(bu).lower() in {"1", "silta", "bridge", "true"}
+    # Bridge / road load capacity in tonnes — critical for tank/heavy vehicle routing.
+    # Digiroad field SUURIN_SALLITTU_MASSA = "greatest permitted mass" in tonnes.
+    mass = props.get("SUURIN_SALLITTU_MASSA") or props.get("load_capacity_t")
+    if mass is not None:
+        try:
+            out["load_capacity_tonnes"] = float(mass)
+        except (TypeError, ValueError):
+            pass
     return out
 
 

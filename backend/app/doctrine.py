@@ -72,6 +72,78 @@ MECH_SPEED_KMH = {
     "cross_severe":         0.0,   # treated as no-go
 }
 
+# ── Vehicle class profiles (Table B-7/B-8 extended) ──────────────────────────
+# Speeds in km/h. max_load_tonnes is the vehicle's own combat weight for
+# bridge_passable() checks. Typical Finnish Army / NATO partner vehicles.
+VEHICLE_CLASSES: dict[str, dict] = {
+    "tank": {
+        "label": "Main Battle Tank (Leopard 2A6)",
+        "road_day":           40.0,
+        "road_night":         25.0,
+        "cross_unrestricted": 20.0,
+        "cross_restricted":    8.0,
+        "cross_severe":        0.0,
+        "max_load_tonnes":    68.0,
+    },
+    "tracked": {
+        "label": "Tracked IFV (CV9030 / Pasi)",
+        "road_day":           40.0,
+        "road_night":         25.0,
+        "cross_unrestricted": 25.0,
+        "cross_restricted":   10.0,
+        "cross_severe":        0.0,
+        "max_load_tonnes":    30.0,
+    },
+    "wheeled": {
+        "label": "Wheeled APC (Patria AMV)",
+        "road_day":           50.0,
+        "road_night":         35.0,
+        "cross_unrestricted": 30.0,
+        "cross_restricted":   12.0,
+        "cross_severe":        0.0,
+        "max_load_tonnes":    26.0,
+    },
+    "logistics": {
+        "label": "Heavy Logistics (Sisu E13TP 8×8)",
+        "road_day":           80.0,
+        "road_night":         50.0,
+        "cross_unrestricted": 20.0,
+        "cross_restricted":    5.0,
+        "cross_severe":        0.0,
+        "max_load_tonnes":    16.0,   # payload — bridges rated for GVW ~32t
+    },
+    "foot": {
+        "label": "Dismounted Infantry",
+        "road_day":            5.0,
+        "road_night":          3.2,
+        "cross_unrestricted":  2.4,
+        "cross_restricted":    1.6,
+        "cross_severe":        0.8,
+        "max_load_tonnes":     0.0,
+    },
+}
+
+# ── Drone (UAS) operating limits ─────────────────────────────────────────────
+# Tactical class UAS — quadrotor reconnaissance / small fixed-wing.
+# Representative of DJI Matrice 300 / Schiebel Camcopter S-100 class.
+# "marginal" = degraded performance / reduced endurance / extra risk.
+# "no_go" = operations not recommended by manufacturer / safety regulations.
+DRONE_LIMITS: dict[str, float] = {
+    "wind_marginal_ms":       8.0,
+    "wind_no_go_ms":         12.0,
+    "gust_marginal_ms":      10.0,
+    "gust_no_go_ms":         15.0,
+    "temp_cold_marginal_c":   0.0,   # battery degradation onset
+    "temp_cold_no_go_c":    -15.0,   # most batteries cease to function
+    "temp_hot_no_go_c":      45.0,
+    "vis_marginal_m":       3000.0,
+    "vis_no_go_m":          1000.0,
+    "ceiling_marginal_m":    300.0,  # cloud base
+    "ceiling_no_go_m":       100.0,
+    "precip_marginal_mmh":    2.0,   # light rain — many drones IP43 rated
+    "precip_no_go_mmh":       5.0,   # moderate rain — risk of motor failure
+}
+
 
 # ── Table B-3 / B-4 — Cover & concealment thresholds (% canopy or roof) ──────
 COVER_PCT = {
@@ -346,3 +418,97 @@ def weighted_mobility(road_features: list[dict[str, Any]]) -> dict[str, Any]:
         "bridge_count": bridges,
         "by_flow_class": by_flow,
     }
+
+
+# ── Vehicle mobility helpers ──────────────────────────────────────────────────
+
+def speed_for_class(vehicle_class: str, mcoo_class: str, is_road: bool = False) -> float:
+    """Return day planning speed (km/h) for a vehicle class on given terrain.
+
+    Uses Table B-7/B-8 speeds from the per-class profile.  Roads always use
+    road_day speed regardless of underlying terrain.
+    no-go terrain is always 0 km/h — impassable to all forces including foot
+    (open water, flooded zones, vertical cliffs require crossing equipment).
+    """
+    profile = VEHICLE_CLASSES.get(vehicle_class, VEHICLE_CLASSES["wheeled"])
+    if is_road:
+        return profile["road_day"]
+    if mcoo_class == "go":
+        return profile["cross_unrestricted"]
+    if mcoo_class == "slow-go":
+        return profile["cross_restricted"]
+    return 0.0  # no-go = impassable to all forces without bridging/engineering
+
+
+def bridge_passable(vehicle_class: str, load_capacity_tonnes: float | None) -> bool:
+    """True if the vehicle can cross a bridge with the given weight limit.
+
+    A bridge with no recorded load capacity is assumed passable (unknown
+    is better than blocking all movement when data is absent).
+    """
+    if load_capacity_tonnes is None:
+        return True
+    profile = VEHICLE_CLASSES.get(vehicle_class, VEHICLE_CLASSES["wheeled"])
+    return load_capacity_tonnes >= profile["max_load_tonnes"]
+
+
+# ── Drone rating helper ───────────────────────────────────────────────────────
+
+def rate_drone(
+    wind_ms: float | None,
+    gust_ms: float | None,
+    temp_c: float | None,
+    visibility_m: float | None,
+    ceiling_m: float | None,
+    precip_mmh: float | None,
+) -> tuple[str, str, list[str]]:
+    """Return (rating, summary, limiting_factors) for drone/UAS operations.
+
+    Rating: "go" | "marginal" | "no-go"
+    Any single no-go threshold exceeded → rating = no-go.
+    Any single marginal threshold exceeded → rating = marginal.
+    All within limits → go.
+    """
+    lim = DRONE_LIMITS
+    no_go: list[str] = []
+    marginal: list[str] = []
+
+    def _check(val: float | None, label: str, marg: float, ng: float, *, low: bool = True) -> None:
+        if val is None:
+            return
+        exceed_ng = (val <= ng) if low else (val >= ng)
+        exceed_mg = (val <= marg) if low else (val >= marg)
+        if exceed_ng:
+            no_go.append(f"{label} {val:.1f} {'≤' if low else '≥'} {ng:.1f} (no-go limit)")
+        elif exceed_mg:
+            marginal.append(f"{label} {val:.1f} {'≤' if low else '≥'} {marg:.1f} (marginal)")
+
+    # High values = bad
+    _check(wind_ms,     "wind",     lim["wind_marginal_ms"],    lim["wind_no_go_ms"],    low=False)
+    _check(gust_ms,     "gust",     lim["gust_marginal_ms"],    lim["gust_no_go_ms"],    low=False)
+    _check(precip_mmh,  "precip",   lim["precip_marginal_mmh"], lim["precip_no_go_mmh"], low=False)
+    # Low values = bad
+    _check(temp_c,       "temp",    lim["temp_cold_marginal_c"],lim["temp_cold_no_go_c"])
+    _check(visibility_m, "vis",     lim["vis_marginal_m"],      lim["vis_no_go_m"])
+    _check(ceiling_m,    "ceiling", lim["ceiling_marginal_m"],  lim["ceiling_no_go_m"])
+    # Hot limit
+    if temp_c is not None and temp_c >= lim["temp_hot_no_go_c"]:
+        no_go.append(f"temp {temp_c:.0f}°C ≥ {lim['temp_hot_no_go_c']:.0f}°C (overheating)")
+
+    all_flags = no_go + marginal
+    if no_go:
+        rating = "no-go"
+        summary = f"UAS no-go: {no_go[0]}"
+    elif marginal:
+        rating = "marginal"
+        summary = f"UAS marginal: {marginal[0]}"
+    else:
+        parts = []
+        if wind_ms is not None:
+            parts.append(f"wind {wind_ms:.1f} m/s")
+        if temp_c is not None:
+            parts.append(f"temp {temp_c:.0f}°C")
+        summary = "UAS go — " + ", ".join(parts) if parts else "UAS go — all within limits"
+        rating = "go"
+
+    return rating, summary, all_flags
