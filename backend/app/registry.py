@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from .providers.base import Provider
 from .providers.digiroad import DigiroadProvider
 from .providers.fmi import FMIProvider
+from .providers.mml import MMLProvider
 from .providers.osm import OSMProvider
 from .providers.statfin import StatFinProvider
 from .schemas import SourceInfo
@@ -34,6 +35,7 @@ SOURCE_IDS: frozenset[str] = frozenset(s.id for s in SOURCES)
 # Live provider instances. Sources not yet implemented are absent here and
 # reported as "unknown / not yet implemented" by the /api/sources endpoint.
 PROVIDERS: dict[str, Provider] = {
+    "mml": MMLProvider(),
     "osm": OSMProvider(),
     "fmi": FMIProvider(),
     "statfin": StatFinProvider(),
