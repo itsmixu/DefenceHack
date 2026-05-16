@@ -177,7 +177,10 @@ def save_file(body: dict[str, Any]) -> dict[str, Any]:
     if folder_id and fs_store.get_folder(folder_id) is None:
         raise HTTPException(404, f"folder '{folder_id}' not found")
 
-    return fs_store.save_file(body)
+    try:
+        return fs_store.save_file(body)
+    except fs_store.HierarchyError as exc:
+        raise HTTPException(400, str(exc))
 
 
 @router.get("/files/{file_id}")
@@ -199,10 +202,15 @@ def open_file(file_id: str) -> dict[str, Any]:
 
 @router.patch("/files/{file_id}")
 def update_file_meta(file_id: str, body: dict[str, Any]) -> dict[str, Any]:
-    """Rename or move a file without touching its content.
+    """Rename, move, or update command-hierarchy fields on a file.
 
-    Body: { name?: str, folder_id?: str | null }
-    Use POST /files (with id) to overwrite the full content.
+    Body fields (all optional, any subset can be provided):
+      name              str
+      folder_id         str | null
+      rank              int  (1..7, clamped)
+      unit              str
+      commander_name    str
+      parent_file_id    str | null   (validated: must outrank child, no cycle)
     """
     if fs_store.get_file_meta(file_id) is None:
         raise HTTPException(404, f"file '{file_id}' not found")
@@ -221,7 +229,69 @@ def update_file_meta(file_id: str, body: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(404, f"folder '{folder_id}' not found")
         meta = fs_store.move_file(file_id, folder_id)
 
+    hierarchy_keys = {"rank", "unit", "commander_name", "parent_file_id"}
+    if hierarchy_keys & body.keys():
+        try:
+            meta = fs_store.update_file_metadata(
+                file_id, {k: body[k] for k in hierarchy_keys if k in body},
+            )
+        except fs_store.HierarchyError as exc:
+            raise HTTPException(400, str(exc))
+
     return meta or fs_store.get_file_meta(file_id) or {}  # type: ignore[return-value]
+
+
+# ── Command hierarchy ─────────────────────────────────────────────────────────
+
+@router.get("/files/{file_id}/hierarchy")
+def file_hierarchy(file_id: str) -> dict[str, Any]:
+    """Return the full command picture for a file.
+
+    Response:
+      {
+        self:        FsFileMeta,
+        ancestors:   FsFileMeta[]   immediate parent → root commander
+        descendants: FsFileMeta[]   all subordinates (BFS order)
+        siblings:    FsFileMeta[]   peers sharing the same parent
+      }
+    """
+    result = fs_store.get_hierarchy(file_id)
+    if result is None:
+        raise HTTPException(404, f"file '{file_id}' not found")
+    return result
+
+
+@router.get("/files/{file_id}/ancestors")
+def file_ancestors(file_id: str) -> list[dict[str, Any]]:
+    """Walk parent_file_id from this file up to the root commander."""
+    if fs_store.get_file_meta(file_id) is None:
+        raise HTTPException(404, f"file '{file_id}' not found")
+    return fs_store.list_ancestors(file_id)
+
+
+@router.get("/files/{file_id}/descendants")
+def file_descendants(
+    file_id: str,
+    recursive: bool = Query(True, description="Walk the full subtree (default) or only immediate children."),
+) -> list[dict[str, Any]]:
+    """All subordinate files (recursive by default)."""
+    if fs_store.get_file_meta(file_id) is None:
+        raise HTTPException(404, f"file '{file_id}' not found")
+    return fs_store.list_descendants(file_id, recursive=recursive)
+
+
+@router.get("/ranks")
+def list_ranks() -> dict[str, Any]:
+    """Echelon table: numeric rank → display name. Used by the rank picker UI."""
+    return {
+        "default": fs_store.RANK_DEFAULT,
+        "min":     fs_store.RANK_MIN,
+        "max":     fs_store.RANK_MAX,
+        "levels":  [
+            {"rank": r, "name": fs_store.RANK_NAMES[r]}
+            for r in range(fs_store.RANK_MIN, fs_store.RANK_MAX + 1)
+        ],
+    }
 
 
 @router.post("/files/{file_id}/duplicate", status_code=201)

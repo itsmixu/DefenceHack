@@ -359,6 +359,33 @@ export interface FsFolder {
   updated_at: string;
 }
 
+// ── Command hierarchy ─────────────────────────────────────────────────────────
+//
+// NATO echelons: numeric rank determines command authority. A file with a
+// HIGHER rank may command (parent) files with a LOWER rank. The same numbers
+// are persisted in the backend index — keep this enum in lock-step with
+// backend/app/fs_store.py:RANK_NAMES.
+
+export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export const RANK_DEFAULT: Rank = 3;
+export const RANK_MIN: Rank = 1;
+export const RANK_MAX: Rank = 7;
+
+export const RANK_NAMES: Record<Rank, string> = {
+  1: 'Team',
+  2: 'Squad',
+  3: 'Platoon',
+  4: 'Company',
+  5: 'Battalion',
+  6: 'Brigade',
+  7: 'Division',
+};
+
+export const RANK_LEVELS: { rank: Rank; name: string }[] = (
+  [1, 2, 3, 4, 5, 6, 7] as Rank[]
+).map((r) => ({ rank: r, name: RANK_NAMES[r] }));
+
 export interface FsFileMeta {
   id: string;
   type: 'file';
@@ -371,10 +398,27 @@ export interface FsFileMeta {
   timeline_selected_ms?: number | null;
   layer_count: number;
   feature_count: number;
+  rank?: Rank;
   unit?: string;
   commander_name?: string;
   parent_file_id?: string | null;
   notes_preview?: string;
+}
+
+export interface FsHierarchy {
+  self: FsFileMeta;
+  ancestors:   FsFileMeta[];   // immediate parent → root commander
+  descendants: FsFileMeta[];   // all subordinates (BFS order)
+  siblings:    FsFileMeta[];   // peers under same parent
+}
+
+export interface FsUpdateMetadataBody {
+  name?: string;
+  folder_id?: string | null;
+  rank?: Rank;
+  unit?: string;
+  commander_name?: string;
+  parent_file_id?: string | null;
 }
 
 export interface FsFileContent extends FsFileMeta {
@@ -384,6 +428,11 @@ export interface FsFileContent extends FsFileMeta {
   drawn_features: FeatureCollection;
   layer_snapshots: Record<string, FeatureCollection>;
   conditions: Record<string, unknown>;
+  // Phase planning — used by the collab multi-tab feature in
+  // FileManagerOverlay. A file may contain up to 6 phases. New files
+  // saved without phases just leave this undefined.
+  phases?: Phase[];
+  current_phase?: number;
 }
 
 export interface FsTree {
@@ -403,7 +452,11 @@ export interface FsSaveBody {
   drawn_features: FeatureCollection;
   layer_snapshots: Record<string, FeatureCollection>;
   conditions?: Record<string, unknown>;
+  // Phase planning — see FsFileContent.phases.
+  phases?: Phase[];
+  current_phase?: number;
   notes?: string;
+  rank?: Rank;
   unit?: string;
   commander_name?: string;
   parent_file_id?: string | null;

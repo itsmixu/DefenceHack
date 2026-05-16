@@ -73,6 +73,43 @@ PHASE_COLORS = [
     "#06b6d4",  # cyan
 ]
 
+# ── Rank / NATO echelons ──────────────────────────────────────────────────────
+#
+# Numeric rank determines command hierarchy. A file with HIGHER rank may
+# command (parent) files with LOWER rank, but not the other way around.
+# Files with the same or higher rank than a candidate parent cannot be made
+# its subordinate — this prevents inversion and cycles.
+#
+#   1 = Team / Crew         (smallest)
+#   2 = Squad / Section
+#   3 = Platoon             (default for new files)
+#   4 = Company / Battery
+#   5 = Battalion
+#   6 = Brigade / Regiment
+#   7 = Division / Corps    (highest)
+
+RANK_DEFAULT = 3
+RANK_MIN = 1
+RANK_MAX = 7
+RANK_NAMES: dict[int, str] = {
+    1: "Team",
+    2: "Squad",
+    3: "Platoon",
+    4: "Company",
+    5: "Battalion",
+    6: "Brigade",
+    7: "Division",
+}
+
+
+def _clamp_rank(value: Any) -> int:
+    """Coerce any incoming rank value to a valid integer in [RANK_MIN, RANK_MAX]."""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return RANK_DEFAULT
+    return max(RANK_MIN, min(RANK_MAX, n))
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -248,6 +285,17 @@ def save_file(data: dict[str, Any]) -> dict[str, Any]:
         for v in snapshots.values()
     )
 
+    # Rank validation: clamp to valid range; default to platoon for new files
+    rank = _clamp_rank(
+        data.get("rank", existing_meta.get("rank", RANK_DEFAULT))
+    )
+
+    # Parent-file validation: must reference a file with HIGHER rank, no cycle
+    raw_parent_id = data.get("parent_file_id", existing_meta.get("parent_file_id"))
+    parent_file_id = _validate_parent_link(
+        index, child_id=file_id, child_rank=rank, parent_id=raw_parent_id,
+    )
+
     meta: dict[str, Any] = {
         "id": file_id,
         "type": "file",
@@ -262,9 +310,10 @@ def save_file(data: dict[str, Any]) -> dict[str, Any]:
         "layer_count":           len(snapshots),
         "feature_count":         feature_count,
         # Command hierarchy
-        "unit":                  data.get("unit", ""),
-        "commander_name":        data.get("commander_name", ""),
-        "parent_file_id":        data.get("parent_file_id"),
+        "rank":                  rank,
+        "unit":                  data.get("unit", existing_meta.get("unit", "")),
+        "commander_name":        data.get("commander_name", existing_meta.get("commander_name", "")),
+        "parent_file_id":        parent_file_id,
         # Notes preview (truncated for index)
         "notes_preview":         (data.get("notes") or "")[:120],
     }
@@ -288,6 +337,10 @@ def save_file(data: dict[str, Any]) -> dict[str, Any]:
         "layer_snapshots":   snapshots,
         # Conditions at save time (FMI weather, astronomy)
         "conditions":        data.get("conditions", {}),
+        # Phase planning — multi-tab collab feature stores per-phase snapshots.
+        # Files saved without phases just persist an empty list / phase 1.
+        "phases":            data.get("phases", []),
+        "current_phase":     data.get("current_phase", 1),
     }
 
     index["files"][file_id] = meta
@@ -542,4 +595,220 @@ def import_file_v2(data: dict[str, Any], strategy: str = "fresh") -> dict[str, A
         if orig_id and orig_id not in _load_index()["files"]:
             save_body["id"] = orig_id
 
+    # Carry rank through if present in the export
+    if "rank" in file_info:
+        save_body["rank"] = file_info["rank"]
+
     return save_file(save_body)
+
+
+# ── Command hierarchy ─────────────────────────────────────────────────────────
+#
+# A file's `parent_file_id` points to a commanding file with a HIGHER rank.
+# These helpers walk that graph in both directions so a higher-ranked planner
+# can see what subordinate units have planned, and a subordinate can trace
+# their chain of command up to division level.
+
+class HierarchyError(ValueError):
+    """Raised when a parent link would create a cycle or invert rank."""
+
+
+def _validate_parent_link(
+    index: dict[str, Any],
+    *,
+    child_id: str,
+    child_rank: int,
+    parent_id: Any,
+) -> str | None:
+    """Validate a candidate parent link before persisting it.
+
+    Rules:
+      • parent_id may be None (top-level file with no commander)
+      • parent must exist in the index
+      • parent must outrank the child (parent.rank > child.rank)
+      • no cycle: the child must not appear in the parent's ancestor chain
+      • a file cannot be its own parent
+
+    Returns the validated parent_id (possibly None) on success.
+    Raises HierarchyError if the link is invalid.
+    """
+    if parent_id in (None, "", "null"):
+        return None
+    if not isinstance(parent_id, str):
+        raise HierarchyError("parent_file_id must be a string")
+    if parent_id == child_id:
+        raise HierarchyError("a file cannot be its own parent")
+
+    parent = index["files"].get(parent_id)
+    if parent is None:
+        raise HierarchyError(f"parent file '{parent_id}' does not exist")
+
+    parent_rank = _clamp_rank(parent.get("rank", RANK_DEFAULT))
+    if parent_rank <= child_rank:
+        raise HierarchyError(
+            f"parent rank ({parent_rank}) must be greater than child rank ({child_rank})"
+        )
+
+    # Walk the parent's ancestor chain. If we ever hit child_id, that's a cycle.
+    cursor: str | None = parent.get("parent_file_id")
+    seen: set[str] = {parent_id}
+    while cursor:
+        if cursor == child_id:
+            raise HierarchyError("cycle detected — child appears in parent's ancestry")
+        if cursor in seen:
+            # Pre-existing cycle in stored data — abort to avoid infinite loop
+            raise HierarchyError("pre-existing cycle in ancestor chain")
+        seen.add(cursor)
+        ancestor = index["files"].get(cursor)
+        if ancestor is None:
+            break
+        cursor = ancestor.get("parent_file_id")
+
+    return parent_id
+
+
+def list_ancestors(file_id: str) -> list[dict[str, Any]]:
+    """Walk parent_file_id from the given file up to the root commander.
+
+    Returns ordered list: [immediate parent, ..., root commander].
+    Empty list if the file has no parent or does not exist.
+    Cycles in pre-existing data are tolerated (capped at 32 levels).
+    """
+    index = _load_index()
+    self_meta = index["files"].get(file_id)
+    if self_meta is None:
+        return []
+
+    chain: list[dict[str, Any]] = []
+    cursor: str | None = self_meta.get("parent_file_id")
+    seen: set[str] = {file_id}
+    while cursor and len(chain) < 32:
+        if cursor in seen:
+            break  # cycle safety
+        seen.add(cursor)
+        ancestor = index["files"].get(cursor)
+        if ancestor is None:
+            break
+        chain.append(ancestor)
+        cursor = ancestor.get("parent_file_id")
+    return chain
+
+
+def list_descendants(file_id: str, recursive: bool = True) -> list[dict[str, Any]]:
+    """All subordinate files of the given file.
+
+    With recursive=True (default), walks the full subtree breadth-first.
+    With recursive=False, returns only immediate children.
+    """
+    index = _load_index()
+    if file_id not in index["files"]:
+        return []
+
+    files = list(index["files"].values())
+    children_of: dict[str, list[dict[str, Any]]] = {}
+    for f in files:
+        pid = f.get("parent_file_id")
+        if pid:
+            children_of.setdefault(pid, []).append(f)
+
+    if not recursive:
+        return children_of.get(file_id, [])
+
+    out: list[dict[str, Any]] = []
+    queue: list[str] = [file_id]
+    seen: set[str] = {file_id}
+    while queue:
+        current_id = queue.pop(0)
+        for child in children_of.get(current_id, []):
+            cid = child["id"]
+            if cid in seen:
+                continue  # cycle safety
+            seen.add(cid)
+            out.append(child)
+            queue.append(cid)
+    return out
+
+
+def list_siblings(file_id: str) -> list[dict[str, Any]]:
+    """Files that share the same parent_file_id (peer units under one commander).
+
+    Returns an empty list for root files (no shared parent) and excludes self.
+    """
+    index = _load_index()
+    self_meta = index["files"].get(file_id)
+    if self_meta is None:
+        return []
+    parent_id = self_meta.get("parent_file_id")
+    if not parent_id:
+        return []
+    return [
+        f for f in index["files"].values()
+        if f.get("parent_file_id") == parent_id and f["id"] != file_id
+    ]
+
+
+def get_hierarchy(file_id: str) -> dict[str, Any] | None:
+    """Bundle the full command picture around a single file.
+
+    Returns:
+      {
+        self:        FsFileMeta,
+        ancestors:   FsFileMeta[]  ordered immediate-parent → root
+        descendants: FsFileMeta[]  all subordinates, BFS order
+        siblings:    FsFileMeta[]  peers under the same commander
+      }
+    Returns None if the file does not exist.
+    """
+    self_meta = get_file_meta(file_id)
+    if self_meta is None:
+        return None
+    return {
+        "self":        self_meta,
+        "ancestors":   list_ancestors(file_id),
+        "descendants": list_descendants(file_id, recursive=True),
+        "siblings":    list_siblings(file_id),
+    }
+
+
+def update_file_metadata(file_id: str, body: dict[str, Any]) -> dict[str, Any] | None:
+    """Patch hierarchy/identity fields without touching the file content.
+
+    Accepts any subset of: rank, unit, commander_name, parent_file_id.
+    Validates parent linkage before persisting.
+    Mirrors the changes into the content file so subsequent opens see them.
+    """
+    index = _load_index()
+    meta = index["files"].get(file_id)
+    if meta is None:
+        return None
+
+    if "rank" in body:
+        meta["rank"] = _clamp_rank(body["rank"])
+    if "unit" in body:
+        meta["unit"] = (body.get("unit") or "").strip()
+    if "commander_name" in body:
+        meta["commander_name"] = (body.get("commander_name") or "").strip()
+    if "parent_file_id" in body:
+        meta["parent_file_id"] = _validate_parent_link(
+            index,
+            child_id=file_id,
+            child_rank=_clamp_rank(meta.get("rank", RANK_DEFAULT)),
+            parent_id=body.get("parent_file_id"),
+        )
+
+    meta["updated_at"] = _now()
+    _save_index(index)
+
+    # Mirror into the content file so a subsequent open reflects the change
+    path = CONTENT_DIR / f"{file_id}.json"
+    if path.exists():
+        try:
+            content = json.loads(path.read_text())
+            for key in ("rank", "unit", "commander_name", "parent_file_id"):
+                if key in meta:
+                    content[key] = meta[key]
+            content["updated_at"] = meta["updated_at"]
+            path.write_text(json.dumps(content))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return meta

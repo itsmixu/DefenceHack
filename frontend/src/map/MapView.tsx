@@ -8,6 +8,7 @@ import DrawControl from '../drawing/DrawControl';
 import ArrowControl from '../drawing/ArrowControl';
 import RulerControl from '../drawing/RulerControl';
 import SymbolControl from '../drawing/SymbolControl';
+import OverlayLayer from './OverlayLayer';
 import ZoneControls from './ZoneControls';
 import MapToolbar from './MapToolbar';
 import { basemaps } from './basemaps';
@@ -206,6 +207,7 @@ export default function MapView() {
         <ArrowControl />
         <RulerControl />
         <SymbolControl />
+        <OverlayLayer />
         {ALL_LAYERS.map((id) => (active[id] ? <SourceLayer key={id} layer={id} /> : null))}
       </MapContainer>
 
