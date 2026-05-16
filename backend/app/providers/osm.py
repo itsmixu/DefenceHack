@@ -2,10 +2,13 @@
 
 Returns nodes/ways matching IPB-relevant tags inside the bbox.
 Categories:
-  hospital, fuel, power_plant, power_substation — critical infrastructure
-  airfield, helipad                              — aviation assets
-  railway, railway_bridge                        — logistics chokepoints
-  waterway, ford                                 — mobility obstacles / crossings
+  hospital, clinic, pharmacy               — medical infrastructure
+  fuel, charging_station, power_plant,
+  power_substation                         — energy & logistics
+  police, fire_station, shelter            — emergency services
+  airfield, helipad                        — aviation assets
+  railway, railway_bridge                  — logistics chokepoints
+  waterway, ford                           — mobility obstacles / crossings
 
 No API key required. Tile servers should not be queried from the backend
 — Overpass is the right tool for tagged features.
@@ -25,23 +28,29 @@ from .base import Provider
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 1 day — OSM data changes slowly
 
-# (category, overpass selector, geometry_hint)
-# geometry_hint: "point" = emit Point; "line" = emit first LineString coord as Point
 CATEGORIES: tuple[tuple[str, str], ...] = (
-    # Critical infrastructure
-    ("hospital",          '["amenity"="hospital"]'),
-    ("fuel",              '["amenity"="fuel"]'),
-    ("power_plant",       '["power"="plant"]'),
-    ("power_substation",  '["power"="substation"]'),
+    # Medical
+    ("hospital",         '["amenity"="hospital"]'),
+    ("clinic",           '["amenity"="clinic"]'),
+    ("pharmacy",         '["amenity"="pharmacy"]'),
+    # Energy & logistics
+    ("fuel",             '["amenity"="fuel"]'),
+    ("charging_station", '["amenity"="charging_station"]'),
+    ("power_plant",      '["power"="plant"]'),
+    ("power_substation", '["power"="substation"]'),
+    # Emergency services
+    ("police",           '["amenity"="police"]'),
+    ("fire_station",     '["amenity"="fire_station"]'),
+    ("shelter",          '["amenity"="shelter"]'),
     # Aviation
-    ("airfield",          '["aeroway"="aerodrome"]'),
-    ("helipad",           '["aeroway"="helipad"]'),
+    ("airfield",         '["aeroway"="aerodrome"]'),
+    ("helipad",          '["aeroway"="helipad"]'),
     # Rail logistics
-    ("railway",           '["railway"="rail"]["bridge"!="yes"]'),
-    ("railway_bridge",    '["railway"="rail"]["bridge"="yes"]'),
+    ("railway",          '["railway"="rail"]["bridge"!="yes"]'),
+    ("railway_bridge",   '["railway"="rail"]["bridge"="yes"]'),
     # Waterway crossings and obstacles
-    ("waterway",          '["waterway"~"^(river|stream|canal)$"]'),
-    ("ford",              '["ford"="yes"]'),
+    ("waterway",         '["waterway"~"^(river|stream|canal)$"]'),
+    ("ford",             '["ford"="yes"]'),
 )
 
 
@@ -55,16 +64,22 @@ def _build_query(bbox: BBox) -> str:
 
 
 def _category_for(tags: dict[str, str]) -> str | None:
-    amenity = tags.get("amenity", "")
-    power   = tags.get("power", "")
-    aeroway = tags.get("aeroway", "")
-    railway = tags.get("railway", "")
+    amenity  = tags.get("amenity", "")
+    power    = tags.get("power", "")
+    aeroway  = tags.get("aeroway", "")
+    railway  = tags.get("railway", "")
     waterway = tags.get("waterway", "")
-    bridge  = tags.get("bridge", "")
-    ford    = tags.get("ford", "")
+    bridge   = tags.get("bridge", "")
+    ford     = tags.get("ford", "")
 
     if amenity == "hospital":           return "hospital"
+    if amenity == "clinic":             return "clinic"
+    if amenity == "pharmacy":           return "pharmacy"
     if amenity == "fuel":               return "fuel"
+    if amenity == "charging_station":   return "charging_station"
+    if amenity == "police":             return "police"
+    if amenity == "fire_station":       return "fire_station"
+    if amenity == "shelter":            return "shelter"
     if power == "plant":                return "power_plant"
     if power == "substation":           return "power_substation"
     if aeroway == "aerodrome":          return "airfield"
@@ -79,7 +94,15 @@ def _category_for(tags: dict[str, str]) -> str | None:
 def _extra_props(tags: dict[str, str], category: str) -> dict[str, Any]:
     """Pull category-specific useful tags into flat properties."""
     extra: dict[str, Any] = {}
-    if category == "airfield":
+    if category == "hospital":
+        extra["beds"] = tags.get("beds")
+        extra["emergency"] = tags.get("emergency")
+    elif category == "clinic":
+        extra["healthcare"] = tags.get("healthcare")
+        extra["emergency"] = tags.get("emergency")
+    elif category == "pharmacy":
+        extra["dispensing"] = tags.get("dispensing")
+    elif category == "airfield":
         extra["icao"] = tags.get("icao")
         extra["iata"] = tags.get("iata")
         extra["runway_length_m"] = tags.get("aeroway:runway:length")
@@ -96,9 +119,6 @@ def _extra_props(tags: dict[str, str], category: str) -> dict[str, Any]:
     elif category == "ford":
         extra["surface"] = tags.get("surface")
         extra["maxdepth_m"] = tags.get("maxdepth")
-    elif category == "hospital":
-        extra["beds"] = tags.get("beds")
-        extra["emergency"] = tags.get("emergency")
     return {k: v for k, v in extra.items() if v is not None}
 
 
