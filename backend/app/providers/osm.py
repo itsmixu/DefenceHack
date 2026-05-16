@@ -54,13 +54,16 @@ CATEGORIES: tuple[tuple[str, str], ...] = (
 )
 
 
-def _build_query(bbox: BBox) -> str:
+def _build_query(bbox: BBox, t: datetime | None = None) -> str:
     bb = f"{bbox.min_lat},{bbox.min_lon},{bbox.max_lat},{bbox.max_lon}"
     parts: list[str] = []
     for _, sel in CATEGORIES:
         parts.append(f"nwr{sel}({bb});")
     body = "".join(parts)
-    return f"[out:json][timeout:30];({body});out center tags;"
+    # Overpass supports historical queries via [date:"..."] — returns OSM state
+    # as it existed at that moment. Minimum date: 2007-10-08 (OSM history start).
+    date_filter = f'[date:"{t.strftime("%Y-%m-%dT%H:%M:%SZ")}"]' if t else ""
+    return f"[out:json][timeout:30]{date_filter};({body});out center tags;"
 
 
 def _category_for(tags: dict[str, str]) -> str | None:
@@ -153,9 +156,14 @@ class OSMProvider(Provider):
         super().__init__(id="osm", label="OpenStreetMap — Overpass API")
 
     async def fetch(self, bbox: BBox, t: datetime | None) -> FeatureCollection:
-        cache_key = {"bbox": bbox.as_list(), "categories": [c for c, _ in CATEGORIES]}
+        # Historical OSM data is immutable, so cache keyed by day is fine.
+        # Current queries (t=None) still use the standard 24-h TTL.
+        date_key = t.strftime("%Y-%m-%d") if t else None
+        ttl = 30 * 24 * 60 * 60 if date_key else CACHE_TTL_SECONDS  # historical = 30 days
+        cache_key = {"bbox": bbox.as_list(), "categories": [c for c, _ in CATEGORIES],
+                     "date": date_key}
 
-        cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
+        cached = cache.read(self.id, cache_key, ttl)
         if cached is not None:
             self.mark("ok", "served from cache")
             return FeatureCollection(
@@ -166,7 +174,7 @@ class OSMProvider(Provider):
                 ),
             )
 
-        query = _build_query(bbox)
+        query = _build_query(bbox, t)
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
