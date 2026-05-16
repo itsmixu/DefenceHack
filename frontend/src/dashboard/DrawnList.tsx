@@ -1,11 +1,11 @@
 import { useDrawnStore } from '../store';
 
 const colorByType: Record<string, string> = {
-  AOI: 'bg-slate-800 text-white',
-  NAI: 'bg-blue-100 text-blue-800',
-  TAI: 'bg-red-100 text-red-800',
-  DP: 'bg-purple-100 text-purple-800',
-  annotation: 'bg-slate-100 text-slate-700',
+  AOI: 'border border-white/35 bg-white/10 text-white',
+  NAI: 'border border-cyan-300/40 bg-cyan-500/10 text-cyan-100',
+  TAI: 'border border-red-300/40 bg-red-500/10 text-red-100',
+  DP: 'border border-violet-300/40 bg-violet-500/10 text-violet-100',
+  annotation: 'border border-white/20 bg-white/5 text-white/80',
 };
 
 export default function DrawnList() {
@@ -15,7 +15,7 @@ export default function DrawnList() {
   if (!features.length) {
     return (
       <div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-white/65">
           No drawn features yet. Use the toolbar at the top-left of the map to
           draw an <strong>AOI</strong>, <strong>NAI</strong>,{' '}
           <strong>TAI</strong>, <strong>DP</strong>, or annotation.
@@ -27,12 +27,12 @@ export default function DrawnList() {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs text-slate-500">
+        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
           {features.length} drawn feature{features.length === 1 ? '' : 's'}
         </p>
         <button
           onClick={() => clear()}
-          className="text-[10px] uppercase tracking-wide text-slate-400 hover:text-red-500"
+          className="text-[10px] uppercase tracking-[0.06em] text-white/50 hover:text-red-300"
         >
           Clear store
         </button>
@@ -46,17 +46,17 @@ export default function DrawnList() {
           return (
             <li
               key={String(f.id)}
-              className="rounded border border-slate-200 p-2 text-xs"
+              className="rounded border border-white/10 bg-black/30 p-2 text-xs"
             >
               <div className="flex items-center justify-between">
                 <span
-                  className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                  className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${
                     colorByType[ft] ?? colorByType.annotation
                   }`}
                 >
                   {ft}
                 </span>
-                <span className="text-slate-400">{f.geometry?.type}</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">{f.geometry?.type}</span>
               </div>
             </li>
           );

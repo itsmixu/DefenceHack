@@ -23,10 +23,10 @@ const LAYERS: LayerEntry[] = [
 ];
 
 const dotForStatus = (s?: LayerStatus) => {
-  if (!s) return 'bg-slate-300';
-  if (s === 'ok') return 'bg-green-500';
-  if (s === 'unavailable') return 'bg-amber-400';
-  return 'bg-red-500';
+  if (!s) return 'bg-white/35';
+  if (s === 'ok') return 'bg-emerald-300';
+  if (s === 'unavailable') return 'bg-amber-300';
+  return 'bg-red-300';
 };
 
 export default function LayerToggles() {
@@ -41,14 +41,14 @@ export default function LayerToggles() {
 
   return (
     <div>
-      <p className="mb-2 text-xs text-slate-500">
+      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
         Toggle layers. Each layer fetches when the map viewport changes.
       </p>
       <ul className="space-y-1">
         {LAYERS.map((l) => {
           const isOsm = l.id === 'osm';
           return (
-            <li key={l.id} className="rounded px-2 py-1.5 hover:bg-slate-50">
+            <li key={l.id} className="rounded border border-white/10 bg-black/30 px-2 py-1.5 hover:bg-white/[0.04]">
               <div className="flex items-center justify-between">
                 <label className="flex flex-1 cursor-pointer items-center gap-2">
                   <input
@@ -57,13 +57,13 @@ export default function LayerToggles() {
                     onChange={() => toggle(l.id)}
                   />
                   <span className="flex flex-col leading-tight">
-                    <span className="font-medium text-slate-800">{l.label}</span>
-                    {l.hint && <span className="text-[10px] text-slate-500">{l.hint}</span>}
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">{l.label}</span>
+                    {l.hint && <span className="font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">{l.hint}</span>}
                   </span>
                 </label>
                 {active[l.id] && loading[l.id] ? (
                   <span
-                    className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-sky-500"
+                    className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
                     title="loading…"
                   />
                 ) : (
@@ -75,23 +75,23 @@ export default function LayerToggles() {
               </div>
 
               {isOsm && active.osm && (
-                <div className="mt-2 rounded border border-slate-200 bg-white/80 p-2">
+                <div className="mt-2 rounded border border-white/15 bg-black/45 p-2">
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">
                       POI filters
                     </span>
                     <div className="flex gap-1">
                       <button
                         type="button"
                         onClick={setAllOsm}
-                        className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+                        className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.12]"
                       >
                         all
                       </button>
                       <button
                         type="button"
                         onClick={clearAllOsm}
-                        className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-slate-50"
+                        className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.12]"
                       >
                         none
                       </button>
@@ -99,7 +99,7 @@ export default function LayerToggles() {
                   </div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-1">
                     {OSM_POI_CATEGORIES.map((c) => (
-                      <label key={c.id} className="flex items-center gap-1 text-[11px] text-slate-700">
+                      <label key={c.id} className="flex items-center gap-1 text-[11px] text-white/85">
                         <input
                           type="checkbox"
                           checked={osmEnabled.includes(c.id)}

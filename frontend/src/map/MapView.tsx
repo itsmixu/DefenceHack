@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import BboxTracker from './BboxTracker';
 import SourceLayer from './SourceLayer';
 import DrawControl from '../drawing/DrawControl';
@@ -41,6 +42,7 @@ const ALL_LAYERS: LayerKey[] = [
 ];
 
 export default function MapView() {
+  const [basemapPanelOpen, setBasemapPanelOpen] = useState(true);
   const [enabledBasemaps, setEnabledBasemaps] = useState<Record<string, boolean>>({
     osm: true,
     mml: false,
@@ -126,9 +128,9 @@ export default function MapView() {
       <ZoneControls />
 
       {(loadingBasemapLabels.length > 0 || loadingLayers.length > 0) && (
-        <div className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-xs text-slate-700 shadow-md">
+        <div className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 rounded border border-white/15 bg-black/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-sm">
           <div className="flex items-center gap-2">
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-sky-500" />
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             {loadingBasemapLabels.length > 0 && (
               <span>
                 Loading basemap
@@ -146,55 +148,67 @@ export default function MapView() {
       )}
 
       {backendUnavailable && (
-        <div className="pointer-events-none absolute left-1/2 top-14 z-[1000] -translate-x-1/2 rounded-md border border-red-300 bg-red-50/95 px-3 py-2 text-xs font-medium text-red-800 shadow-md">
+        <div className="pointer-events-none absolute left-1/2 top-14 z-[1000] -translate-x-1/2 rounded border border-red-300/40 bg-black/85 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-200 shadow-[0_10px_26px_rgba(0,0,0,0.6)] backdrop-blur-sm">
           Backend offline — start backend on port 8000.
           {backendReason ? ` ${backendReason}` : ''}
         </div>
       )}
 
-      <div className="pointer-events-auto absolute right-3 top-3 z-[1000] flex flex-col gap-2 rounded-md border border-slate-200 bg-white/95 p-2 text-xs shadow-md">
-        <div className="font-semibold text-slate-700">Basemap</div>
-        {basemaps.map((b) => {
-          const enabled = !!enabledBasemaps[b.id];
-          return (
-            <div key={b.id} className="rounded border border-slate-200 p-1.5">
-              <label className="flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={() => toggleBasemap(b.id)}
-                />
-                <span>{b.label}</span>
-              </label>
-              <div className="mt-1 flex items-center gap-2">
-                <span className="text-[10px] text-slate-500">opacity</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={Math.round((basemapOpacity[b.id] ?? 1) * 100)}
-                  onChange={(e) => {
-                    const value = Number(e.target.value) / 100;
-                    setBasemapOpacity((prev) => ({ ...prev, [b.id]: value }));
-                  }}
-                  className="w-24"
-                />
-                <span className="w-8 text-right text-[10px] text-slate-500">
-                  {Math.round((basemapOpacity[b.id] ?? 1) * 100)}%
-                </span>
+      <div className="pointer-events-auto absolute right-3 top-3 z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setBasemapPanelOpen((s) => !s)}
+            className="flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70 hover:text-white"
+            title={basemapPanelOpen ? 'Collapse basemap stack' : 'Expand basemap stack'}
+          >
+            Basemap Stack
+            {basemapPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={handleForceReload}
+            className="rounded border border-white/20 bg-white/[0.06] p-1 text-white/85 hover:bg-white/[0.14] hover:text-white"
+            title="Discard cached features and refetch every active layer"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {basemapPanelOpen &&
+          basemaps.map((b) => {
+            const enabled = !!enabledBasemaps[b.id];
+            return (
+              <div key={b.id} className="rounded border border-white/10 bg-black/90 p-1.5">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={() => toggleBasemap(b.id)}
+                  />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">{b.label}</span>
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase text-white/55">opacity</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round((basemapOpacity[b.id] ?? 1) * 100)}
+                    onChange={(e) => {
+                      const value = Number(e.target.value) / 100;
+                      setBasemapOpacity((prev) => ({ ...prev, [b.id]: value }));
+                    }}
+                    className="w-24 accent-white"
+                  />
+                  <span className="w-8 text-right font-mono text-[10px] text-white/65">
+                    {Math.round((basemapOpacity[b.id] ?? 1) * 100)}%
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
-        <button
-          type="button"
-          onClick={handleForceReload}
-          className="mt-1 rounded border border-slate-300 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100"
-          title="Discard cached features and refetch every active layer"
-        >
-          Force reload
-        </button>
+            );
+          })}
       </div>
     </div>
   );

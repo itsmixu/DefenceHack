@@ -10,13 +10,13 @@ export default function SidePanel() {
   const [tab, setTab] = useState<Tab>('layers');
 
   return (
-    <div className="flex h-full flex-col border-l border-slate-200 bg-white">
-      <header className="border-b border-slate-200 px-4 py-3">
-        <h1 className="text-base font-bold text-slate-800">61N IPB Tool</h1>
-        <p className="text-xs text-slate-500">DefenceHack — Junction</p>
+    <div className="flex h-full flex-col border-l border-white/10 bg-[#111111]/92 text-white">
+      <header className="border-b border-white/10 px-4 py-3">
+        <h1 className="text-sm font-black uppercase tracking-[0.14em] text-white">61N IPB Tool</h1>
+        <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">DefenceHack — Junction</p>
       </header>
 
-      <nav className="flex border-b border-slate-200 text-xs">
+      <nav className="grid grid-cols-3 border-b border-white/10 text-[10px] uppercase tracking-[0.16em]">
         <TabBtn
           active={tab === 'layers'}
           onClick={() => setTab('layers')}
@@ -37,7 +37,7 @@ export default function SidePanel() {
         />
       </nav>
 
-      <main className="flex-1 overflow-y-auto p-3 text-sm">
+      <main className="flex-1 overflow-y-auto p-3 text-sm text-white/90">
         {tab === 'layers' && <LayerToggles />}
         {tab === 'sources' && <SourceStatusList />}
         {tab === 'drawn' && <DrawnList />}
@@ -57,10 +57,10 @@ function TabBtn({ active, onClick, icon, label }: TabProps) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1 px-2 py-2 transition-colors ${
+      className={`flex items-center justify-center gap-1 px-2 py-2 transition ${
         active
-          ? 'border-b-2 border-blue-500 font-semibold text-blue-600'
-          : 'text-slate-500 hover:bg-slate-50'
+          ? 'border-b border-white bg-white text-black shadow-[inset_0_-1px_0_rgba(255,255,255,0.9)]'
+          : 'text-white/60 hover:bg-white/[0.06] hover:text-white'
       }`}
     >
       {icon}

@@ -128,7 +128,7 @@ export default function ZoneControls() {
       <button
         type="button"
         onClick={handleSaveCurrent}
-        className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-md hover:bg-slate-50"
+        className="flex items-center gap-1.5 rounded border border-white/20 bg-black/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] hover:bg-black"
         title="Save the current viewport as an operation zone and prefetch all sources"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -136,37 +136,37 @@ export default function ZoneControls() {
       </button>
 
       {zones.length > 0 && (
-        <div className="w-72 rounded-md border border-slate-200 bg-white/95 shadow-md">
+        <div className="w-72 rounded border border-white/15 bg-black/95 shadow-[0_10px_28px_rgba(0,0,0,0.45)]">
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90 hover:bg-white/[0.06]"
           >
             <span className="flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5" />
               Operation zones ({zones.length})
             </span>
-            <span className="text-slate-400">{open ? '−' : '+'}</span>
+            <span className="text-white/60">{open ? '−' : '+'}</span>
           </button>
 
           {open && (
-            <ul className="max-h-72 overflow-y-auto border-t border-slate-100">
+            <ul className="max-h-72 overflow-y-auto border-t border-white/10">
               {zones.map((z) => {
                 const isEditing = editingId === z.id;
                 return (
                   <li
                     key={z.id}
-                    className="flex items-center gap-1 px-2 py-1.5 hover:bg-slate-50"
+                    className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/[0.05]"
                   >
                     {isEditing ? (
                       <div className="flex flex-1 flex-col gap-1">
                         <input
                           value={draftName}
                           onChange={(e) => setDraftName(e.target.value)}
-                          className="w-full rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-700"
+                          className="w-full rounded border border-white/25 bg-black/90 px-1.5 py-1 text-xs text-white"
                           placeholder="Zone name"
                         />
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] uppercase tracking-[0.06em] text-white/45">
                           Save uses current map viewport for size/location
                         </span>
                       </div>
@@ -174,14 +174,14 @@ export default function ZoneControls() {
                       <button
                         type="button"
                         onClick={() => handleZoneClick(z)}
-                        className="flex flex-1 flex-col items-start gap-0 truncate text-left text-xs text-slate-700"
+                        className="flex flex-1 flex-col items-start gap-0 truncate text-left text-xs text-white/90"
                         title={`Fly to ${z.name} (cached data); refresh button refetches`}
                       >
                         <span className="flex items-center gap-1.5 truncate font-medium">
                           <PrefetchDot status={z.prefetchStatus ?? 'idle'} />
                           <span className="truncate">{z.name}</span>
                         </span>
-                        <span className="pl-4 text-[10px] text-slate-400">
+                        <span className="pl-4 font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">
                           {z.lastFetchedAt
                             ? `fetched ${formatRelative(z.lastFetchedAt)}`
                             : 'never fetched'}
@@ -193,7 +193,7 @@ export default function ZoneControls() {
                       type="button"
                       onClick={() => runPrefetch(z)}
                       disabled={busyId === z.id || isEditing}
-                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                      className="rounded p-1 text-white/55 hover:bg-white/[0.1] hover:text-white disabled:opacity-50"
                       title="Re-prefetch all sources"
                     >
                       <RefreshCw
@@ -206,7 +206,7 @@ export default function ZoneControls() {
                         <button
                           type="button"
                           onClick={() => saveEditFromViewport(z)}
-                          className="rounded p-1 text-emerald-600 hover:bg-emerald-50"
+                          className="rounded p-1 text-emerald-300 hover:bg-emerald-500/15"
                           title="Save zone name and current viewport"
                         >
                           <Check className="h-3 w-3" />
@@ -214,7 +214,7 @@ export default function ZoneControls() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded p-1 text-slate-500 hover:bg-slate-100"
+                          className="rounded p-1 text-white/55 hover:bg-white/[0.1]"
                           title="Cancel edit"
                         >
                           <X className="h-3 w-3" />
@@ -224,7 +224,7 @@ export default function ZoneControls() {
                       <button
                         type="button"
                         onClick={() => startEdit(z)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        className="rounded p-1 text-white/55 hover:bg-white/[0.1] hover:text-white"
                         title="Edit zone name and viewport"
                       >
                         <Pencil className="h-3 w-3" />
@@ -238,7 +238,7 @@ export default function ZoneControls() {
                         if (editingId === z.id) cancelEdit();
                         push('info', `Removed zone "${z.name}"`);
                       }}
-                      className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      className="rounded p-1 text-white/55 hover:bg-red-500/15 hover:text-red-300"
                       title="Delete zone"
                     >
                       <Trash2 className="h-3 w-3" />
@@ -268,9 +268,9 @@ function formatRelative(ts: number): string {
 
 function PrefetchDot({ status }: { status: NonNullable<Zone['prefetchStatus']> }) {
   if (status === 'fetching') {
-    return <Zap className="h-3 w-3 animate-pulse text-amber-500" />;
+    return <Zap className="h-3 w-3 animate-pulse text-amber-300" />;
   }
-  if (status === 'ready') return <span className="h-2 w-2 rounded-full bg-emerald-500" />;
-  if (status === 'error') return <span className="h-2 w-2 rounded-full bg-red-500" />;
-  return <span className="h-2 w-2 rounded-full bg-slate-300" />;
+  if (status === 'ready') return <span className="h-2 w-2 rounded-full bg-emerald-300" />;
+  if (status === 'error') return <span className="h-2 w-2 rounded-full bg-red-300" />;
+  return <span className="h-2 w-2 rounded-full bg-white/35" />;
 }

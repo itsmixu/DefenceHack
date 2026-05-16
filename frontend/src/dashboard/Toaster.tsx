@@ -8,9 +8,9 @@ const ICON: Record<ToastKind, typeof Info> = {
 };
 
 const SKIN: Record<ToastKind, string> = {
-  info: 'border-sky-200 bg-sky-50 text-sky-800',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  error: 'border-red-200 bg-red-50 text-red-800',
+  info: 'border-white/20 bg-black/75 text-white',
+  success: 'border-emerald-300/30 bg-black/80 text-emerald-100',
+  error: 'border-red-300/35 bg-black/80 text-red-100',
 };
 
 export default function Toaster() {
@@ -26,7 +26,7 @@ export default function Toaster() {
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-start gap-2 rounded-md border px-3 py-2 text-xs shadow-md animate-in fade-in slide-in-from-right-2 ${SKIN[t.kind]}`}
+            className={`pointer-events-auto flex items-start gap-2 rounded border px-3 py-2 text-xs shadow-[0_10px_28px_rgba(0,0,0,0.45)] backdrop-blur-sm animate-in fade-in slide-in-from-right-2 ${SKIN[t.kind]}`}
             role="status"
           >
             <Icon className="mt-0.5 h-4 w-4 shrink-0" />
@@ -34,7 +34,7 @@ export default function Toaster() {
             <button
               type="button"
               onClick={() => dismiss(t.id)}
-              className="rounded p-0.5 hover:bg-black/10"
+              className="rounded p-0.5 hover:bg-white/10"
               title="Dismiss"
             >
               <X className="h-3 w-3" />
