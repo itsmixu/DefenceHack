@@ -196,12 +196,71 @@ export interface TimelineSnapshotResponse {
 // ── Plans & versions ──────────────────────────────────────────────────────────
 
 export interface Phase {
-  id: number;
+  id: number;                                         // 1..6
   name: string;
-  drawn_features: FeatureCollection;
-  active_layers: string[];
+  color?: string;                                     // phase tab accent
   notes: string;
+  // Per-phase viewport (each phase can focus a different area)
+  bbox?: [number, number, number, number] | null;
+  center?: [number, number] | null;
+  zoom?: number | null;
+  // Per-phase timeline position
+  timeline_selected_ms?: number | null;
+  // Per-phase layer state
+  active_layers: string[];
+  drawn_features: FeatureCollection;
+  // Per-phase recording (the actual fetched GeoJSON at save time)
+  layer_snapshots?: Record<string, FeatureCollection>;
+  conditions?: Record<string, unknown>;
+  // Legacy field alias — kept for PlansPanel compatibility
   conditions_snapshot?: Record<string, unknown>;
+}
+
+// ── .ipb.json v2 export format ────────────────────────────────────────────────
+
+export interface IpbPhaseExportV2 {
+  phase_id: number;
+  name: string;
+  color?: string;
+  order: number;
+  notes: string;
+  viewport: {
+    bbox?: [number, number, number, number] | null;
+    center?: [number, number] | null;
+    zoom?: number | null;
+  };
+  timeline: { selected_ms?: number | null };
+  active_layers: string[];
+  drawn_features: FeatureCollection;
+  snapshot: {
+    captured_at: string;
+    conditions: Record<string, unknown>;
+    layer_snapshots: Record<string, FeatureCollection>;
+  };
+}
+
+export interface IpbExportV2 {
+  format: 'ipb-operation';
+  format_version: 2;
+  exported_at: string;
+  exported_by: Record<string, string>;
+  file: {
+    original_id: string;
+    name: string;
+    created_at: string;
+    updated_at: string;
+    notes: string;
+    unit: string;
+    commander_name: string;
+    parent_file_original_id: string | null;
+    folder_path: string[];
+  };
+  active_phase_id: number;
+  phases: IpbPhaseExportV2[];
+  shared: {
+    drawn_features: FeatureCollection;
+    feature_styles: Record<string, Record<string, unknown>>;
+  };
 }
 
 export interface Plan {

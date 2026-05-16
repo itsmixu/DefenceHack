@@ -31,9 +31,11 @@ ENDPOINT OVERVIEW:
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from .. import fs_store
 
@@ -241,3 +243,37 @@ def duplicate_file(file_id: str, body: dict[str, Any] | None = None) -> dict[str
 def delete_file(file_id: str) -> None:
     if not fs_store.delete_file(file_id):
         raise HTTPException(404, f"file '{file_id}' not found")
+
+
+# ── Export / Import ────────────────────────────────────────────────────────────
+
+@router.get("/files/{file_id}/export")
+def export_file(file_id: str) -> JSONResponse:
+    """Export a file as a self-contained .ipb.json (v2 format).
+
+    Sets Content-Disposition so browsers prompt a download.
+    """
+    result = fs_store.export_file_v2(file_id)
+    if result is None:
+        raise HTTPException(404, f"file '{file_id}' not found")
+    raw_name = result.get("file", {}).get("name", "operation")
+    safe_name = re.sub(r"[^\w\s\-.]", "_", raw_name).strip() or "operation"
+    return JSONResponse(
+        content=result,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.ipb.json"'},
+    )
+
+
+@router.post("/import", status_code=201)
+def import_file(
+    body: dict[str, Any],
+    strategy: str = Query(
+        "fresh",
+        description="'fresh' mints a new local ID (safe default). 'merge' keeps the original ID if it doesn't already exist.",
+    ),
+) -> dict[str, Any]:
+    """Import a .ipb.json v2 export. Returns the created file metadata."""
+    try:
+        return fs_store.import_file_v2(body, strategy=strategy)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))

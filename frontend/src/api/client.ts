@@ -23,6 +23,7 @@ import type {
   FsFileContent,
   FsTree,
   FsSaveBody,
+  IpbExportV2,
 } from './types';
 
 export interface BboxQuery {
@@ -272,4 +273,36 @@ export async function fsDeleteFolder(id: string, recursive = false): Promise<voi
     const msg = await res.text().catch(() => res.statusText);
     throw new Error(msg || `DELETE /api/fs/folders/${id} -> HTTP ${res.status}`);
   }
+}
+
+/** Fetch and immediately trigger a browser download of the .ipb.json export. */
+export async function fsExportDownload(id: string, fileName: string): Promise<void> {
+  const res = await fetch(`/api/fs/files/${id}/export`);
+  if (!res.ok) throw new Error(`Export failed: HTTP ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(fileName.replace(/[^\w\s\-. ]/g, '_') || 'operation').trim()}.ipb.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Import a parsed .ipb.json v2 document. Returns the created file metadata. */
+export async function fsImportFile(
+  data: IpbExportV2,
+  strategy: 'fresh' | 'merge' = 'fresh',
+): Promise<FsFileMeta> {
+  const res = await fetch(`/api/fs/import?strategy=${strategy}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => res.statusText);
+    throw new Error(msg || `Import failed: HTTP ${res.status}`);
+  }
+  return (await res.json()) as FsFileMeta;
 }
