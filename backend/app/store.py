@@ -46,6 +46,15 @@ def save_plan(data: dict[str, Any]) -> dict[str, Any]:
         "updated_at": now,
         "bbox": data.get("bbox"),
         # GeoJSON FeatureCollection of shapes drawn by the user on the map.
+        # Each feature should set properties.feature_type to one of:
+        #   "AOI" — Area of Operations / Area of Interest boundary
+        #   "NAI" — Named Area of Interest (intelligence collection target)
+        #   "TAI" — Target Area of Interest (action / engagement zone)
+        #   "DP"  — Decision Point (condition-triggered branch on the map)
+        #   "annotation" — freeform note shape, no doctrinal meaning
+        # Frontend colour-codes these (AOI/NAI/TAI/DP convention from IPB
+        # doctrine: AOI thick black, NAI dashed blue, TAI dashed red, DP
+        # diamond marker). Other shapes default to "annotation".
         "drawn_features": data.get("drawn_features", {"type": "FeatureCollection", "features": []}),
         # Which layer toggles were active when the plan was saved.
         "active_layers": data.get("active_layers", []),

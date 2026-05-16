@@ -228,7 +228,7 @@ Storage: JSON files under `data/plans/` and `data/operations/`
 
 ### Computed / derived layers
 
-Two layers that are not raw data feeds but server-side computations:
+Layers that are not raw data feeds but server-side computations:
 
 **`mml_contours`** — elevation contour lines from MML Maastotietokanta
 WFS (feature type `Korkeusviiva`). Each LineString has `elevation_m`
@@ -241,6 +241,45 @@ hard cover, 5 = fully exposed) and `reason` string to every feature.
 Render as a green-to-red choropleth. Answers "what forces can do and
 what is possible" from the project goals. MML terrain is skipped if
 `MML_API_KEY` is absent (OSM land-use still runs).
+
+### IPB analysis endpoints (`/api/analyze/...`)
+
+Doctrinal IPB products that fuse multiple raw layers. These are the
+headline outputs that map directly to the 61N source material on IPB.
+
+**`GET /api/analyze/mcoo?bbox=…&t=…`** — Modified Combined Obstacle
+Overlay. Per doctrine "the primary terrain analysis output product".
+Returns a GeoJSON FeatureCollection where every feature carries:
+  - `mcoo_class`: `"go"` | `"slow-go"` | `"no-go"`
+  - `mcoo_role`: `"terrain"` | `"mobility_corridor"` | `"chokepoint_bridge"`
+Frontend renders as the primary tactical overlay (green / yellow / red,
+with bridges highlighted as chokepoints).
+
+**`GET /api/analyze/terrain-effects?bbox=…&t=…`** — Terrain Effects
+Matrix. Structured JSON (not GeoJSON) rating each warfighting function:
+`maneuver`, `fires`, `intelligence`, `sustainment`, `protection`. Each
+has a `rating` (unrestricted / restricted / severely_restricted),
+`rationale` string, and `key_factors` list. Frontend renders as a
+side-panel briefing card. Includes a `source_status` dict so the UI
+can show which feeds backed the assessment.
+
+**`GET /api/analyze/viewshed?bbox=…&observer_lon=&observer_lat=`** —
+Line-of-sight / dead-ground analysis. STUB; returns `meta.status =
+"unavailable"` because it needs the MML DEM raster pipeline
+(`rasterio` + GeoTIFF) not yet implemented. Documented because it's
+flagged in the 61N material as a key AI capability.
+
+### Drawn-feature types in plans
+
+Each feature in a plan's `drawn_features` FeatureCollection should
+carry `properties.feature_type` from this doctrinal set so Miko can
+style them correctly:
+
+  - `"AOI"` — Area of Operations / Area of Interest boundary
+  - `"NAI"` — Named Area of Interest (intelligence collection target)
+  - `"TAI"` — Target Area of Interest (action / engagement zone)
+  - `"DP"`  — Decision Point (condition-triggered branch on the map)
+  - `"annotation"` — freeform note shape, no doctrinal meaning
 
 ### Naming
 
