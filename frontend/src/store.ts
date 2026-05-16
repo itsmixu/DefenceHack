@@ -117,7 +117,7 @@ const featureKey = (f: Feature): string => {
   if (f.id != null) return `id:${f.id}`;
   const props = (f.properties ?? {}) as Record<string, unknown>;
   // Try common stable identifiers across our providers.
-  for (const k of ['mtk_id', 'osm_id', 'posti_alue', 'fid', 'gml_id', 'station_id', 'cell_id']) {
+  for (const k of ['mtk_id', 'osm_id', 'posti_alue', 'fid', 'gml_id', 'station_id', 'cell_id', 'cellid', 'satid']) {
     if (props[k] != null) return `${k}:${String(props[k])}`;
   }
   // Fallback: hash the full geometry so every distinct polygon gets a distinct key.

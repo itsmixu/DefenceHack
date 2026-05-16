@@ -34,13 +34,20 @@ CACHE_TTL_SECONDS = 24 * 60 * 60  # 1 day
 RING_VERTICES = 24  # polygon approximation of coverage circle
 
 # Approximate coverage radius by radio technology (metres).
+# Values reflect typical rural/mixed Finnish terrain (mostly flat, forested).
+# Urban cells are smaller; these are IPB worst-case (widest plausible range).
+#   5G NR:  1 km   — millimetre-wave / sub-6 GHz urban small cells
+#   4G LTE: 5 km   — typical macro cell in mixed terrain
+#   3G UMTS:8 km   — wider than LTE due to lower frequency
+#   2G GSM: 15 km  — legacy towers often cover large rural areas; can reach 35 km
+# Source: 3GPP TS 36.104 / ITU-R M.1225 field measurement averages.
 RADIUS_BY_RADIO: dict[str, int] = {
-    "NR":   300,
-    "LTE":  1000,
-    "UMTS": 2000,
-    "GSM":  5000,
+    "NR":   1_000,
+    "LTE":  5_000,
+    "UMTS": 8_000,
+    "GSM":  15_000,
 }
-DEFAULT_RADIUS = 1000
+DEFAULT_RADIUS = 5_000
 
 _GEOD = Geod(ellps="WGS84")
 
