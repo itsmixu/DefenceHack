@@ -47,7 +47,7 @@ export default function WeatherCard() {
   }
 
   // Aggregate the latest values across all stations in the viewport.
-  const agg = aggregate(data.features as { properties: FmiStationProps }[]);
+  const agg = aggregate(data.features as unknown as { properties: FmiStationProps }[]);
 
   return (
     <section className="rounded border border-white/10 bg-black/40 p-3">

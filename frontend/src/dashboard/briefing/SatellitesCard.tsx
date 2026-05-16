@@ -39,7 +39,7 @@ export default function SatellitesCard() {
     );
   }
 
-  const sats = (data.features as { properties: N2yoProps }[])
+  const sats = (data.features as unknown as { properties: N2yoProps }[])
     .filter((f) => f.properties.feature_type === 'position')
     .sort((a, b) => (a.properties.altitude_km ?? 0) - (b.properties.altitude_km ?? 0));
 
