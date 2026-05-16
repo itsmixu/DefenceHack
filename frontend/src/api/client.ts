@@ -23,6 +23,8 @@ import type {
   FsFileContent,
   FsTree,
   FsSaveBody,
+  FsHierarchy,
+  FsUpdateMetadataBody,
   IpbExportV2,
 } from './types';
 
@@ -264,6 +266,40 @@ export function fsRenameFile(id: string, name: string): Promise<FsFileMeta> {
 
 export function fsMoveFile(id: string, folder_id: string | null): Promise<FsFileMeta> {
   return patchJson<FsFileMeta>(`/api/fs/files/${id}`, { folder_id });
+}
+
+/** Update any subset of name/folder/rank/unit/commander_name/parent_file_id. */
+export function fsUpdateMetadata(id: string, body: FsUpdateMetadataBody): Promise<FsFileMeta> {
+  return patchJson<FsFileMeta>(`/api/fs/files/${id}`, body);
+}
+
+// ── Command hierarchy ─────────────────────────────────────────────────────────
+
+/** Full command picture: self + ancestors + descendants + siblings. */
+export function fsGetHierarchy(id: string): Promise<FsHierarchy> {
+  return fetchJson<FsHierarchy>(`/api/fs/files/${id}/hierarchy`);
+}
+
+/** Walk parent_file_id from this file up to the root commander. */
+export function fsListAncestors(id: string): Promise<FsFileMeta[]> {
+  return fetchJson<FsFileMeta[]>(`/api/fs/files/${id}/ancestors`);
+}
+
+/** Subordinate files (recursive by default). */
+export function fsListDescendants(id: string, recursive = true): Promise<FsFileMeta[]> {
+  return fetchJson<FsFileMeta[]>(`/api/fs/files/${id}/descendants?recursive=${recursive}`);
+}
+
+export interface RanksResponse {
+  default: number;
+  min: number;
+  max: number;
+  levels: { rank: number; name: string }[];
+}
+
+/** Echelon table for rank-picker UIs. */
+export function fsListRanks(): Promise<RanksResponse> {
+  return fetchJson<RanksResponse>('/api/fs/ranks');
 }
 
 export function fsDuplicateFile(id: string, name?: string): Promise<FsFileMeta> {
