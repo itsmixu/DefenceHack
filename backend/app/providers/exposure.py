@@ -51,6 +51,7 @@ import httpx
 from .. import cache
 from ..bbox import BBox
 from ..geo import reproject_bbox, reproject_geometry
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -215,11 +216,11 @@ class ExposureProvider(Provider):
             ) if api_key else None
         )
 
-        async with httpx.AsyncClient() as client:
-            tasks: list[Any] = [_fetch_osm_landuse(client, bbox)]
-            if api_key and src_bbox:
-                tasks.append(_fetch_mml_terrain(client, api_key, src_bbox))
-            results = await asyncio.gather(*tasks)
+        client = get_client()
+        tasks: list[Any] = [_fetch_osm_landuse(client, bbox)]
+        if api_key and src_bbox:
+            tasks.append(_fetch_mml_terrain(client, api_key, src_bbox))
+        results = await asyncio.gather(*tasks)
 
         features = [f for group in results for f in group]
         cache.write(self.id, cache_key, {"features": features})

@@ -24,6 +24,7 @@ import httpx
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -180,12 +181,12 @@ class N2YOProvider(Provider):
                 ),
             )
 
-        async with httpx.AsyncClient() as client:
-            tasks = [
-                _fetch_above(client, api_key, lat, lon, radius, cat_id, cat_label)
-                for cat_id, cat_label in CATEGORIES.items()
-            ]
-            results = await asyncio.gather(*tasks)
+        client = get_client()
+        tasks = [
+            _fetch_above(client, api_key, lat, lon, radius, cat_id, cat_label)
+            for cat_id, cat_label in CATEGORIES.items()
+        ]
+        results = await asyncio.gather(*tasks)
 
         errors = [err for _, err in results if err]
 

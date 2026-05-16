@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
 from ..bbox import BBox, parse_bbox
 from ..registry import PROVIDERS, SOURCE_IDS
@@ -22,7 +22,7 @@ async def get_layer(
     t: datetime | None = Query(
         None, description="ISO 8601 UTC timestamp, e.g. 2026-05-15T12:00:00Z"
     ),
-) -> JSONResponse:
+) -> Response:
     if source not in SOURCE_IDS:
         raise HTTPException(404, f"unknown source '{source}'")
 
@@ -38,7 +38,11 @@ async def get_layer(
     else:
         fc = await provider.fetch(bbox, t)
 
-    return JSONResponse(
-        content=fc.model_dump(mode="json"),
+    # model_dump_json() serializes straight to a JSON string, skipping the
+    # intermediate Python dict that JSONResponse(content=fc.model_dump(...))
+    # would build for every feature. On large FeatureCollections this halves
+    # the transient memory of the response.
+    return Response(
+        content=fc.model_dump_json(),
         media_type=GEOJSON_MEDIA,
     )

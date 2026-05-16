@@ -40,7 +40,7 @@ from math import cos, radians, sin
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 
 from .. import doctrine
 from ..analysis.drone_conditions import build_drone_conditions
@@ -60,9 +60,9 @@ VEHICLE_CLASSES = list(doctrine.VEHICLE_CLASSES.keys())
 async def mcoo(
     bbox: BBox = Depends(parse_bbox),
     t: datetime | None = Query(None),
-) -> JSONResponse:
+) -> Response:
     fc = await build_mcoo(bbox, t)
-    return JSONResponse(content=fc.model_dump(mode="json"), media_type=GEOJSON_MEDIA)
+    return Response(content=fc.model_dump_json(), media_type=GEOJSON_MEDIA)
 
 
 @router.get("/terrain-effects")
@@ -81,7 +81,7 @@ async def mobility(
         description=f"Vehicle class: {', '.join(VEHICLE_CLASSES)}",
     ),
     t: datetime | None = Query(None),
-) -> JSONResponse:
+) -> Response:
     """Force mobility surface — planning speed (km/h) per terrain feature.
 
     Returns a GeoJSON FeatureCollection where every terrain polygon and road
@@ -90,7 +90,7 @@ async def mobility(
     Bridges with load_capacity_tonnes < vehicle weight are marked no-go.
     """
     fc = await build_mobility(bbox, t, vehicle_class)
-    return JSONResponse(content=fc.model_dump(mode="json"), media_type=GEOJSON_MEDIA)
+    return Response(content=fc.model_dump_json(), media_type=GEOJSON_MEDIA)
 
 
 @router.get("/drone-conditions")
@@ -113,7 +113,7 @@ async def drone_conditions(
 async def astronomical(
     bbox: BBox = Depends(parse_bbox),
     t: datetime | None = Query(None),
-) -> JSONResponse:
+) -> Response:
     """Sun/moon/twilight forecast — 3 days from t (or now).
 
     Returns a GeoJSON FeatureCollection with one Point per day at the
@@ -126,7 +126,7 @@ async def astronomical(
     All computed locally via the astral library — no external API.
     """
     fc = await PROVIDERS["astronomy"].fetch(bbox, t)
-    return JSONResponse(content=fc.model_dump(mode="json"), media_type=GEOJSON_MEDIA)
+    return Response(content=fc.model_dump_json(), media_type=GEOJSON_MEDIA)
 
 
 @router.get("/viewshed")

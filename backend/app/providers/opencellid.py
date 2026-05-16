@@ -25,6 +25,7 @@ from pyproj import Geod
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -146,13 +147,10 @@ class OpenCelliDProvider(Provider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    API_URL, params=params,
-                    headers={"User-Agent": "DefenceHack-IPB/0.1"},
-                )
-                resp.raise_for_status()
-                payload = resp.json()
+            client = get_client()
+            resp = await client.get(API_URL, params=params, timeout=30.0)
+            resp.raise_for_status()
+            payload = resp.json()
         except httpx.HTTPError as e:
             self.mark("unavailable", f"OpenCelliD error: {e}")
             return empty_collection(
