@@ -7,6 +7,7 @@ from .providers.base import Provider
 from .providers.digiroad import DigiroadProvider
 from .providers.fmi import FMIProvider
 from .providers.mml import MMLProvider
+from .providers.opencellid import OpenCelliDProvider
 from .providers.osm import OSMProvider
 from .providers.statfin import StatFinProvider
 from .schemas import SourceInfo
@@ -40,6 +41,7 @@ PROVIDERS: dict[str, Provider] = {
     "fmi": FMIProvider(),
     "statfin": StatFinProvider(),
     "digiroad": DigiroadProvider(),
+    "opencellid": OpenCelliDProvider(),
 }
 
 
