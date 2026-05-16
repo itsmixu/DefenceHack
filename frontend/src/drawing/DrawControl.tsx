@@ -51,12 +51,13 @@ export default function DrawControl() {
       };
     };
 
+    // Hide geoman's native toolbar — all shape drawing is triggered via MapToolbar.
     m.pm.addControls({
       position: 'topleft',
-      drawCircleMarker: false,
-      drawText: false,
-      cutPolygon: false,
-      rotateMode: false,
+      drawMarker: false, drawCircleMarker: false, drawPolyline: false,
+      drawRectangle: false, drawPolygon: false, drawCircle: false,
+      drawText: false, editMode: false, dragMode: false,
+      cutPolygon: false, removalMode: false, rotateMode: false,
     });
 
     const drawn = new Map<number, TaggedLayer>();

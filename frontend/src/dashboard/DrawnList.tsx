@@ -1,4 +1,6 @@
-import { MoveUpRight, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { MoveUpRight, Shield, Trash2 } from 'lucide-react';
+import ms from 'milsymbol';
 import { useDrawnStore } from '../store';
 
 const STYLE_BY_TYPE: Record<string, string> = {
@@ -23,6 +25,14 @@ const GEO_LABEL: Record<string, string> = {
   Point:      'point',
 };
 
+function SymbolMiniIcon({ sidc }: { sidc: string }) {
+  const svg = useMemo(() => {
+    try { return new ms.Symbol(sidc, { size: 24, frame: true, fill: true, infoFields: false }).asSVG(); }
+    catch { return ''; }
+  }, [sidc]);
+  return <span dangerouslySetInnerHTML={{ __html: svg }} style={{ display: 'inline-flex' }} />;
+}
+
 export default function DrawnList() {
   const features    = useDrawnStore((s) => s.features);
   const clear       = useDrawnStore((s) => s.clear);
@@ -32,15 +42,16 @@ export default function DrawnList() {
     return (
       <div>
         <p className="text-xs text-white/65">
-          No drawn features yet. Use the <strong>Tools</strong> tab to draw
-          arrows, or the map toolbar (top-left) to draw areas and lines.
+          No drawn features yet. Use the toolbar at the bottom of the map to
+          draw arrows, place symbols, or draw areas and lines.
         </p>
       </div>
     );
   }
 
-  const arrows = features.filter((f) => f.properties?.feature_type === 'ARROW');
-  const shapes  = features.filter((f) => f.properties?.feature_type !== 'ARROW');
+  const arrows  = features.filter((f) => f.properties?.feature_type === 'ARROW');
+  const symbols = features.filter((f) => f.properties?.feature_type === 'SYMBOL');
+  const shapes  = features.filter((f) => !['ARROW', 'SYMBOL'].includes(f.properties?.feature_type as string));
 
   return (
     <div className="space-y-3">
@@ -115,10 +126,41 @@ export default function DrawnList() {
         </section>
       )}
 
+      {/* Symbols section */}
+      {symbols.length > 0 && (
+        <section>
+          <p className="mb-1.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">
+            <Shield size={9} />
+            Symbols ({symbols.length})
+          </p>
+          <ul className="space-y-1">
+            {symbols.map((f) => {
+              const p = f.properties as { sidc?: string; name?: string; category?: string };
+              const sidc     = p.sidc     ?? 'SFGPUCI----D---';
+              const name     = p.name     ?? 'Symbol';
+              const category = p.category ?? '';
+              return (
+                <li key={String(f.id)} className="flex items-center gap-2 rounded border border-white/10 bg-black/30 px-2 py-1.5">
+                  <SymbolMiniIcon sidc={sidc} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono text-[10px] font-semibold text-white/85">{name}</div>
+                    <div className="font-mono text-[9px] text-white/40">{category}</div>
+                  </div>
+                  <button onClick={() => removeFeature(String(f.id))} title="Delete symbol"
+                    className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300">
+                    <Trash2 size={11} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       {/* Shapes section */}
       {shapes.length > 0 && (
         <section>
-          {arrows.length > 0 && (
+          {(arrows.length > 0 || symbols.length > 0) && (
             <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">
               Shapes ({shapes.length})
             </p>

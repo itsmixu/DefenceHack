@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, MoveUpRight, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import BboxTracker from './BboxTracker';
 import SourceLayer from './SourceLayer';
 import DrawControl from '../drawing/DrawControl';
 import ArrowControl from '../drawing/ArrowControl';
+import SymbolControl from '../drawing/SymbolControl';
 import LayerSlots from './LayerSlots';
 import ZoneControls from './ZoneControls';
-import { useTacticalStore } from '../store';
+import MapToolbar from './MapToolbar';
 import { basemaps } from './basemaps';
 import {
   useBackendStatusStore,
@@ -197,14 +198,15 @@ export default function MapView() {
         <BboxTracker />
         <DrawControl />
         <ArrowControl />
+        <SymbolControl />
         {ALL_LAYERS.map((id) => (active[id] ? <SourceLayer key={id} layer={id} /> : null))}
       </MapContainer>
 
       <LayerSlots />
       <ZoneControls />
 
-      {/* ── Floating drawing toolbar ── */}
-      <MapDrawingToolbar />
+      {/* ── Bottom drawing toolbar ── */}
+      <MapToolbar />
 
       {(loadingBasemapLabels.length > 0 || loadingLayers.length > 0) && (
         <div className="pointer-events-none absolute left-1/2 top-24 z-[1000] -translate-x-1/2 rounded border border-white/15 bg-black/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-sm">
@@ -356,108 +358,6 @@ export default function MapView() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Floating map drawing toolbar ──────────────────────────────────────────────
-// Rendered as an absolute overlay on the map so it's always visible — no need
-// to hunt through side-panel tabs to find the arrow tool.
-const ARROW_COLORS = [
-  '#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#ffffff', '#a855f7', '#f97316',
-];
-const ARROW_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
-
-function MapDrawingToolbar() {
-  const isArrowMode   = useTacticalStore((s) => s.isArrowMode);
-  const arrowColor    = useTacticalStore((s) => s.arrowColor);
-  const arrowSize     = useTacticalStore((s) => s.arrowSize);
-  const setArrowMode  = useTacticalStore((s) => s.setArrowMode);
-  const setArrowColor = useTacticalStore((s) => s.setArrowColor);
-  const setArrowSize  = useTacticalStore((s) => s.setArrowSize);
-
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    // Positioned on the left side of the map, below the geoman controls (~220px down)
-    <div
-      className="pointer-events-auto absolute left-2.5 z-[900] flex flex-col gap-1"
-      style={{ top: '220px' }}
-    >
-      {/* Main arrow button */}
-      <button
-        onClick={() => {
-          if (isArrowMode) { setArrowMode(false); setExpanded(false); }
-          else { setArrowMode(true); setExpanded(true); }
-        }}
-        title={isArrowMode ? 'Stop drawing arrows (Esc)' : 'Draw arrow'}
-        className="flex h-8 w-8 items-center justify-center rounded border-2 shadow-[0_2px_8px_rgba(0,0,0,0.6)] transition"
-        style={{
-          borderColor: isArrowMode ? arrowColor : 'rgba(255,255,255,0.25)',
-          backgroundColor: isArrowMode ? `${arrowColor}22` : '#1a1a1a',
-          color: isArrowMode ? arrowColor : 'rgba(255,255,255,0.7)',
-        }}
-      >
-        <MoveUpRight size={15} />
-      </button>
-
-      {/* Expand/collapse options panel */}
-      {(isArrowMode || expanded) && (
-        <div className="flex flex-col gap-1.5 rounded border border-white/20 bg-[#111]/95 p-2 shadow-[0_4px_16px_rgba(0,0,0,0.7)] backdrop-blur-sm">
-          {/* Colour row */}
-          <p className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/35">Colour</p>
-          <div className="flex flex-col gap-1">
-            {ARROW_COLORS.map((c) => (
-              <button
-                key={c}
-                title={c}
-                onClick={() => setArrowColor(c)}
-                className="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
-                style={{
-                  backgroundColor: c,
-                  borderColor: arrowColor === c ? '#fff' : 'transparent',
-                  boxShadow: arrowColor === c ? `0 0 0 1px ${c}` : 'none',
-                }}
-              />
-            ))}
-            {/* Custom */}
-            <label className="relative flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/5 text-[9px] text-white/40 hover:border-white/40">
-              ✎
-              <input type="color" value={arrowColor} onChange={(e) => setArrowColor(e.target.value)}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-            </label>
-          </div>
-
-          {/* Size column */}
-          <p className="mt-1 font-mono text-[8px] uppercase tracking-[0.1em] text-white/35">Size</p>
-          <div className="flex flex-col gap-0.5">
-            {ARROW_SIZES.map((label, i) => {
-              const s = i + 1;
-              return (
-                <button
-                  key={s}
-                  onClick={() => setArrowSize(s)}
-                  className="rounded px-1.5 py-0.5 text-center font-mono text-[9px] transition"
-                  style={{
-                    background: arrowSize === s ? `${arrowColor}25` : 'transparent',
-                    color: arrowSize === s ? arrowColor : 'rgba(255,255,255,0.5)',
-                    fontWeight: arrowSize === s ? 700 : 400,
-                    border: `1px solid ${arrowSize === s ? arrowColor + '60' : 'transparent'}`,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-
-          {isArrowMode && (
-            <p className="mt-1 font-mono text-[8px] leading-tight text-amber-200/60">
-              Click &amp; drag to draw.<br />Esc to stop.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

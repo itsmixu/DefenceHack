@@ -386,36 +386,55 @@ export const MILITARY_FEATURE_TYPES = [
 
 export type MilitaryFeatureType = typeof MILITARY_FEATURE_TYPES[number]['type'];
 
+// Active map tool — only one can be active at a time
+export type ActiveMapTool = 'arrow' | 'symbol' | 'shape' | null;
+
 interface TacticalState {
+  activeTool: ActiveMapTool;
+  setActiveTool: (tool: ActiveMapTool) => void;
+  // Geoman shape mode (used when activeTool === 'shape')
   pendingType: MilitaryFeatureType | null;
   pendingDrawMode: 'Polygon' | 'Polyline' | 'Marker' | null;
   setPending: (type: MilitaryFeatureType, mode: 'Polygon' | 'Polyline' | 'Marker') => void;
   clearPending: () => void;
-  // Arrow tool state
+  // Arrow tool
   isArrowMode: boolean;
   arrowColor: string;
-  arrowSize: number;   // 1–5
+  arrowSize: number;
   setArrowMode: (active: boolean) => void;
   setArrowColor: (color: string) => void;
   setArrowSize: (size: number) => void;
+  // Symbol tool
+  pendingSymbol: { sidc: string; name: string; category: string } | null;
+  setPendingSymbol: (sym: { sidc: string; name: string; category: string } | null) => void;
 }
 
 export const useTacticalStore = create<TacticalState>((set) => ({
+  activeTool: null,
+  setActiveTool: (activeTool) => set((s) => ({
+    activeTool,
+    isArrowMode: activeTool === 'arrow',
+    pendingType: activeTool === 'shape' ? s.pendingType : null,
+    pendingDrawMode: activeTool === 'shape' ? s.pendingDrawMode : null,
+    pendingSymbol: activeTool === 'symbol' ? s.pendingSymbol : null,
+  })),
   pendingType: null,
   pendingDrawMode: null,
-  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode, isArrowMode: false }),
+  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode, activeTool: 'shape', isArrowMode: false }),
   clearPending: () => set({ pendingType: null, pendingDrawMode: null }),
   isArrowMode: false,
   arrowColor: '#ef4444',
   arrowSize: 3,
   setArrowMode: (isArrowMode) => set((s) => ({
     isArrowMode,
-    // deactivate geoman when arrow mode starts
+    activeTool: isArrowMode ? 'arrow' : (s.activeTool === 'arrow' ? null : s.activeTool),
     pendingType: isArrowMode ? null : s.pendingType,
     pendingDrawMode: isArrowMode ? null : s.pendingDrawMode,
   })),
   setArrowColor: (arrowColor) => set({ arrowColor }),
   setArrowSize: (arrowSize) => set({ arrowSize }),
+  pendingSymbol: null,
+  setPendingSymbol: (pendingSymbol) => set({ pendingSymbol }),
 }));
 
 // ---------- OSM POI category filters (persisted) ----------
