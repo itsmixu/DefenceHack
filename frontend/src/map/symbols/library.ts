@@ -18,7 +18,8 @@ export interface MilSymbol {
   category: SymbolCategory;
   subcategory?: string;
   desc?: string;
-  echelon?: string; // display hint only
+  echelon?: string;
+  isCustom?: boolean;
 }
 
 export type SymbolCategory =
@@ -29,205 +30,91 @@ export type SymbolCategory =
   | 'Equipment'
   | 'Installations';
 
-export const SYMBOL_LIBRARY: MilSymbol[] = [
-  // ── Friendly ground units ────────────────────────────────────────────────
-  {
-    sidc: 'SFGPUCI----D---', name: 'Infantry',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Dismounted infantry unit',
-  },
-  {
-    sidc: 'SFGPUCIZ---D---', name: 'Mech. Infantry',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Mechanised infantry — IFV/APC mounted',
-  },
-  {
-    sidc: 'SFGPUCA----D---', name: 'Armor',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Tank / armour unit',
-  },
-  {
-    sidc: 'SFGPUCF----D---', name: 'Artillery',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Field artillery — howitzer, rocket',
-  },
-  {
-    sidc: 'SFGPUCAD---D---', name: 'Air Defense',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Air defense artillery (SHORAD / HIMAD)',
-  },
-  {
-    sidc: 'SFGPUCR----D---', name: 'Reconnaissance',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Recon / cavalry — ISR forward unit',
-  },
-  {
-    sidc: 'SFGPUCL----D---', name: 'Engineer',
-    category: 'Friendly', subcategory: 'Combat Support',
-    desc: 'Combat engineer — breach, obstacle, bridge',
-  },
-  {
-    sidc: 'SFGPUCAH---D---', name: 'Aviation',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Rotary wing aviation unit',
-  },
-  {
-    sidc: 'SFGPUCAS---D---', name: 'Special Ops',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Special operations forces (SOF)',
-  },
-  {
-    sidc: 'SFGPUH-----D---', name: 'HQ / Command',
-    category: 'Friendly', subcategory: 'C2',
-    desc: 'Command post / headquarters',
-  },
-  {
-    sidc: 'SFGPUUS----D---', name: 'Signal',
-    category: 'Friendly', subcategory: 'Combat Support',
-    desc: 'Signal / communications unit',
-  },
-  {
-    sidc: 'SFGPUUM----D---', name: 'Medical',
-    category: 'Friendly', subcategory: 'CSS',
-    desc: 'Medical support — aid station, hospital',
-  },
-  {
-    sidc: 'SFGPUUL----D---', name: 'Logistics',
-    category: 'Friendly', subcategory: 'CSS',
-    desc: 'Combat service support — supply, transport',
-  },
-  {
-    sidc: 'SFGPUUP----D---', name: 'Military Police',
-    category: 'Friendly', subcategory: 'CSS',
-    desc: 'Military police / law enforcement',
-  },
-  {
-    sidc: 'SFGPUUE----D---', name: 'Electronic Warfare',
-    category: 'Friendly', subcategory: 'Combat Support',
-    desc: 'EW — jamming, SIGINT, ELINT',
-  },
-  {
-    sidc: 'SFGPUUSC---D---', name: 'CBRN',
-    category: 'Friendly', subcategory: 'Combat Support',
-    desc: 'Chemical, biological, radiological, nuclear defence',
-  },
-  {
-    sidc: 'SFGPUUSR---D---', name: 'Sniper',
-    category: 'Friendly', subcategory: 'Combat',
-    desc: 'Sniper / sharpshooter team',
-  },
+// Helper: swap affiliation character (index 1) in an SIDC
+function aff(sidc: string, affiliation: 'F' | 'H' | 'U' | 'N'): string {
+  return sidc[0] + affiliation + sidc.slice(2);
+}
 
-  // ── Hostile (enemy) units ─────────────────────────────────────────────────
-  {
-    sidc: 'SHGPUCI----D---', name: 'Enemy Infantry',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Confirmed enemy infantry unit',
-  },
-  {
-    sidc: 'SHGPUCIZ---D---', name: 'Enemy Mech. Inf.',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy mechanised infantry',
-  },
-  {
-    sidc: 'SHGPUCA----D---', name: 'Enemy Armor',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy tank / armour unit',
-  },
-  {
-    sidc: 'SHGPUCF----D---', name: 'Enemy Artillery',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy field artillery',
-  },
-  {
-    sidc: 'SHGPUCAD---D---', name: 'Enemy Air Defense',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy air defense system',
-  },
-  {
-    sidc: 'SHGPUCR----D---', name: 'Enemy Recon',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy reconnaissance element',
-  },
-  {
-    sidc: 'SHGPUCAH---D---', name: 'Enemy Aviation',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy rotary wing',
-  },
-  {
-    sidc: 'SHGPUH-----D---', name: 'Enemy HQ',
-    category: 'Hostile', subcategory: 'C2',
-    desc: 'Enemy command post',
-  },
-  {
-    sidc: 'SHGPUCAS---D---', name: 'Enemy SOF',
-    category: 'Hostile', subcategory: 'Combat',
-    desc: 'Enemy special operations forces',
-  },
-  {
-    sidc: 'SHGPUUE----D---', name: 'Enemy EW',
-    category: 'Hostile', subcategory: 'Combat Support',
-    desc: 'Enemy electronic warfare unit',
-  },
-  {
-    sidc: 'SHGPUUL----D---', name: 'Enemy Logistics',
-    category: 'Hostile', subcategory: 'CSS',
-    desc: 'Enemy logistics / supply element',
-  },
+// Base SIDCs (Friendly = F at index 1)
+const BASE_SIDCS = {
+  Infantry:       'SFGPUCI----D---',
+  Motorized:      'SFGPUCIM---D---',
+  Mechanized:     'SFGPUCIZ---D---',
+  Armor:          'SFGPUCA----D---',
+  Aviation:       'SFGPUCAH---D---',
+  Maintenance:    'SFGPUUE----D---',
+  HQ:             'SFGPUH-----D---',
+  Logistics:      'SFGPUUL----D---',
+  FireSupport:    'SFGPUCFS---D---',
+  Artillery:      'SFGPUCF----D---',
+  Mortar:         'SFGPUCFM---D---',
+  Medical:        'SFGPUUM----D---',
+  Reconnaissance: 'SFGPUCR----D---',
+  UAV:            'SFAPMFU----D---',
+  FixedWing:      'SFAPWMFB---D---',
+  Unknown:        'SFGPU------D---',
+};
 
-  // ── Unknown ──────────────────────────────────────────────────────────────
-  {
-    sidc: 'SUGPU------D---', name: 'Unknown Unit',
-    category: 'Unknown',
-    desc: 'Unidentified ground unit',
-  },
-  {
-    sidc: 'SUGPUCI----D---', name: 'Unknown Infantry',
-    category: 'Unknown',
-    desc: 'Unknown infantry — affiliation not confirmed',
-  },
-  {
-    sidc: 'SUGPUCA----D---', name: 'Unknown Armor',
-    category: 'Unknown',
-    desc: 'Unknown armoured vehicle',
-  },
-  {
-    sidc: 'SUGPUH-----D---', name: 'Unknown HQ',
-    category: 'Unknown',
-    desc: 'Unknown command element',
-  },
-  {
-    sidc: 'SUAPU------D---', name: 'Unknown Aircraft',
-    category: 'Unknown',
-    desc: 'Unidentified aircraft',
-  },
+// Unit type definitions: [name, base SIDC, desc]
+const UNIT_TYPES: Array<{ key: keyof typeof BASE_SIDCS; name: string; desc: string }> = [
+  { key: 'Infantry',       name: 'Infantry',        desc: 'Dismounted infantry unit' },
+  { key: 'Motorized',      name: 'Motorized',        desc: 'Motorized infantry unit' },
+  { key: 'Mechanized',     name: 'Mechanized',       desc: 'Mechanised infantry — IFV/APC mounted' },
+  { key: 'Armor',          name: 'Armor',            desc: 'Tank / armour unit' },
+  { key: 'Aviation',       name: 'Aviation',         desc: 'Rotary wing aviation unit' },
+  { key: 'Maintenance',    name: 'Maintenance',      desc: 'Maintenance and repair unit' },
+  { key: 'HQ',             name: 'HQ',               desc: 'Command post / headquarters' },
+  { key: 'Logistics',      name: 'Supply/Logistics', desc: 'Combat service support — supply, transport' },
+  { key: 'FireSupport',    name: 'Fire Support',     desc: 'Fire support coordination element' },
+  { key: 'Artillery',      name: 'Artillery',        desc: 'Field artillery — howitzer, rocket' },
+  { key: 'Mortar',         name: 'Mortar',           desc: 'Mortar unit' },
+  { key: 'Medical',        name: 'Medical',          desc: 'Medical support — aid station, hospital' },
+  { key: 'Reconnaissance', name: 'Reconnaissance',   desc: 'Recon / cavalry — ISR forward unit' },
+  { key: 'UAV',            name: 'UAV',              desc: 'Unmanned aerial vehicle unit' },
+  { key: 'FixedWing',      name: 'Fixed Wing',       desc: 'Fixed wing aviation unit' },
+  { key: 'Unknown',        name: 'Unknown/Empty',    desc: 'Unidentified or placeholder unit' },
+];
 
-  // ── Neutral ──────────────────────────────────────────────────────────────
-  {
-    sidc: 'SNGPU------D---', name: 'Neutral Force',
-    category: 'Neutral',
-    desc: 'Neutral or civilian force',
-  },
-  {
-    sidc: 'SNGPUCI----D---', name: 'Neutral Infantry',
-    category: 'Neutral',
-    desc: 'Neutral armed personnel',
-  },
+const AFFILIATIONS: Array<{ cat: 'Friendly' | 'Hostile' | 'Unknown' | 'Neutral'; char: 'F' | 'H' | 'U' | 'N'; prefix: string }> = [
+  { cat: 'Friendly', char: 'F', prefix: '' },
+  { cat: 'Hostile',  char: 'H', prefix: 'Enemy ' },
+  { cat: 'Unknown',  char: 'U', prefix: 'Unknown ' },
+  { cat: 'Neutral',  char: 'N', prefix: 'Neutral ' },
+];
 
-  // ── Equipment (friendly) ─────────────────────────────────────────────────
+// Generate 4 affiliation variants for each unit type
+const unitSymbols: MilSymbol[] = [];
+for (const affil of AFFILIATIONS) {
+  for (const ut of UNIT_TYPES) {
+    unitSymbols.push({
+      sidc: aff(BASE_SIDCS[ut.key], affil.char),
+      name: `${affil.prefix}${ut.name}`,
+      category: affil.cat,
+      desc: ut.desc,
+    });
+  }
+  // Custom entry for each affiliation
+  const customSidcBase = 'SFGPU------D---';
+  unitSymbols.push({
+    sidc: aff(customSidcBase, affil.char),
+    name: 'Custom',
+    category: affil.cat,
+    desc: 'Custom unit — type your own designation',
+    isCustom: true,
+  });
+}
+
+// Equipment symbols
+const equipmentSymbols: MilSymbol[] = [
   {
     sidc: 'SFGPEVCA---D---', name: 'Tank',
     category: 'Equipment', subcategory: 'Vehicles',
     desc: 'Main battle tank',
   },
   {
-    sidc: 'SFGPEVCAH--D---', name: 'APC / IFV',
+    sidc: 'SFGPEVCAT--D---', name: 'APC/IFV',
     category: 'Equipment', subcategory: 'Vehicles',
     desc: 'Armoured personnel carrier / infantry fighting vehicle',
-  },
-  {
-    sidc: 'SFGPEVAT---D---', name: 'Artillery Piece',
-    category: 'Equipment', subcategory: 'Weapons',
-    desc: 'Towed howitzer / cannon',
   },
   {
     sidc: 'SFGPEVA----D---', name: 'Truck',
@@ -235,27 +122,29 @@ export const SYMBOL_LIBRARY: MilSymbol[] = [
     desc: 'Wheeled logistics vehicle',
   },
   {
-    sidc: 'SFAPMFH----D---', name: 'Helicopter',
+    sidc: 'SFAPWMHQ---D---', name: 'Helicopter',
     category: 'Equipment', subcategory: 'Aviation',
     desc: 'Military helicopter (rotary wing)',
   },
   {
-    sidc: 'SFAPWMFB---D---', name: 'Fixed-wing',
+    sidc: 'SFAPWMFB---D---', name: 'Fixed Wing',
     category: 'Equipment', subcategory: 'Aviation',
     desc: 'Fixed-wing aircraft',
+  },
+  {
+    sidc: 'SFAPMFU----D---', name: 'UAV',
+    category: 'Equipment', subcategory: 'Aviation',
+    desc: 'Unmanned aerial vehicle',
   },
   {
     sidc: 'SFGPEWA----D---', name: 'Radar',
     category: 'Equipment', subcategory: 'Sensors',
     desc: 'Ground-based radar system',
   },
-  {
-    sidc: 'SFAPMFF----D---', name: 'UAV / Drone',
-    category: 'Equipment', subcategory: 'Aviation',
-    desc: 'Unmanned aerial vehicle',
-  },
+];
 
-  // ── Installations ────────────────────────────────────────────────────────
+// Installation symbols
+const installationSymbols: MilSymbol[] = [
   {
     sidc: 'SFGPIDC----D---', name: 'Command Post',
     category: 'Installations',
@@ -277,16 +166,6 @@ export const SYMBOL_LIBRARY: MilSymbol[] = [
     desc: 'Military airfield / FARP',
   },
   {
-    sidc: 'SFGPIDM----D---', name: 'Maintenance',
-    category: 'Installations',
-    desc: 'Vehicle / equipment maintenance facility',
-  },
-  {
-    sidc: 'SFGPIDR----D---', name: 'Relay Station',
-    category: 'Installations',
-    desc: 'Communication relay / signal node',
-  },
-  {
     sidc: 'SHGPIDC----D---', name: 'Enemy CP',
     category: 'Installations',
     desc: 'Confirmed enemy command post',
@@ -296,6 +175,12 @@ export const SYMBOL_LIBRARY: MilSymbol[] = [
     category: 'Installations',
     desc: 'Enemy ammunition / supply point',
   },
+];
+
+export const SYMBOL_LIBRARY: MilSymbol[] = [
+  ...unitSymbols,
+  ...equipmentSymbols,
+  ...installationSymbols,
 ];
 
 export const SYMBOL_CATEGORIES: SymbolCategory[] = [

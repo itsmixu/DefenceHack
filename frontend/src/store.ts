@@ -218,6 +218,7 @@ interface DrawnState {
   setAll: (fs: DrawnFeature[]) => void;
   addFeature: (f: DrawnFeature) => void;
   removeFeature: (id: string | number) => void;
+  updateFeature: (id: string | number, patch: Partial<DrawnFeature>) => void;
   clear: () => void;
   toCollection: () => FeatureCollection;
 }
@@ -227,6 +228,7 @@ export const useDrawnStore = create<DrawnState>((set, get) => ({
   setAll: (features) => set({ features }),
   addFeature: (f) => set((s) => ({ features: [...s.features, f] })),
   removeFeature: (id) => set((s) => ({ features: s.features.filter((x) => x.id !== id) })),
+  updateFeature: (id, patch) => set((s) => ({ features: s.features.map((f) => f.id === id ? { ...f, ...patch } : f) })),
   clear: () => set({ features: [] }),
   toCollection: () => ({ type: 'FeatureCollection', features: get().features }),
 }));
@@ -387,7 +389,7 @@ export const MILITARY_FEATURE_TYPES = [
 export type MilitaryFeatureType = typeof MILITARY_FEATURE_TYPES[number]['type'];
 
 // Active map tool — only one can be active at a time
-export type ActiveMapTool = 'arrow' | 'symbol' | 'shape' | null;
+export type ActiveMapTool = 'arrow' | 'symbol' | 'shape' | 'delete' | null;
 
 interface TacticalState {
   activeTool: ActiveMapTool;
@@ -405,8 +407,11 @@ interface TacticalState {
   setArrowColor: (color: string) => void;
   setArrowSize: (size: number) => void;
   // Symbol tool
-  pendingSymbol: { sidc: string; name: string; category: string } | null;
-  setPendingSymbol: (sym: { sidc: string; name: string; category: string } | null) => void;
+  pendingSymbol: { sidc: string; name: string; category: string; isCustom?: boolean; customName?: string } | null;
+  setPendingSymbol: (sym: { sidc: string; name: string; category: string; isCustom?: boolean; customName?: string } | null) => void;
+  // Delete mode
+  isDeleteMode: boolean;
+  setDeleteMode: (active: boolean) => void;
 }
 
 export const useTacticalStore = create<TacticalState>((set) => ({
@@ -414,13 +419,14 @@ export const useTacticalStore = create<TacticalState>((set) => ({
   setActiveTool: (activeTool) => set((s) => ({
     activeTool,
     isArrowMode: activeTool === 'arrow',
+    isDeleteMode: activeTool === 'delete',
     pendingType: activeTool === 'shape' ? s.pendingType : null,
     pendingDrawMode: activeTool === 'shape' ? s.pendingDrawMode : null,
     pendingSymbol: activeTool === 'symbol' ? s.pendingSymbol : null,
   })),
   pendingType: null,
   pendingDrawMode: null,
-  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode, activeTool: 'shape', isArrowMode: false }),
+  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode, activeTool: 'shape', isArrowMode: false, isDeleteMode: false }),
   clearPending: () => set({ pendingType: null, pendingDrawMode: null }),
   isArrowMode: false,
   arrowColor: '#ef4444',
@@ -428,6 +434,7 @@ export const useTacticalStore = create<TacticalState>((set) => ({
   setArrowMode: (isArrowMode) => set((s) => ({
     isArrowMode,
     activeTool: isArrowMode ? 'arrow' : (s.activeTool === 'arrow' ? null : s.activeTool),
+    isDeleteMode: false,
     pendingType: isArrowMode ? null : s.pendingType,
     pendingDrawMode: isArrowMode ? null : s.pendingDrawMode,
   })),
@@ -435,6 +442,11 @@ export const useTacticalStore = create<TacticalState>((set) => ({
   setArrowSize: (arrowSize) => set({ arrowSize }),
   pendingSymbol: null,
   setPendingSymbol: (pendingSymbol) => set({ pendingSymbol }),
+  isDeleteMode: false,
+  setDeleteMode: (isDeleteMode) => set((s) => ({
+    isDeleteMode,
+    activeTool: isDeleteMode ? 'delete' : (s.activeTool === 'delete' ? null : s.activeTool),
+  })),
 }));
 
 // ---------- OSM POI category filters (persisted) ----------
