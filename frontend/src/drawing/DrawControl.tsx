@@ -33,7 +33,7 @@ export default function DrawControl() {
   const pendingTypeRef = useRef<string | null>(null);
   pendingTypeRef.current = pendingType;
 
-  // Activate geoman draw mode when TacticalTools sets a pending mode.
+  // Activate geoman draw mode when the bottom MapToolbar sets a pending mode.
   useEffect(() => {
     if (!pendingDrawMode) return;
     const m = map as L.Map & {
@@ -104,7 +104,7 @@ export default function DrawControl() {
 
     const onCreate = (e: { layer: TaggedLayer }) => {
       const layer = e.layer;
-      // Use type pre-selected from TacticalTools panel if set; otherwise prompt.
+      // Use type pre-selected from the bottom MapToolbar if set; otherwise prompt.
       const pt = pendingTypeRef.current;
       if (pt) {
         layer._defenceHackFeatureType = pt as FeatureType;

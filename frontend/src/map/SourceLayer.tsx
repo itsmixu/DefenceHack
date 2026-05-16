@@ -161,6 +161,17 @@ export default function SourceLayer({ layer }: Props) {
       return { type: 'FeatureCollection', features: visible };
     }
 
+    if (layer === 'opencellid') {
+      // Drop the server-emitted coverage polygons — pointToLayer renders each
+      // tower as concentric heatmap rings instead, so the polygons would
+      // double-draw and dim the additive blend.
+      const onlyTowers = cachedFeatures.filter((f) => {
+        const cat = String((f.properties as Record<string, unknown> | null)?.category ?? '');
+        return cat !== 'coverage';
+      });
+      return { type: 'FeatureCollection', features: onlyTowers };
+    }
+
     // fmi_forecast returns 9 grid points × 48 hourly timesteps stacked at the
     // same coordinates. Without time filtering the map shows every timestep at
     // once and the slider has no visible effect. Pick the timestep nearest to
