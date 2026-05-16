@@ -102,6 +102,10 @@ export interface DroneConditionsResponse {
     current_rating: DroneRating;
     next_go_window?: string | null;
     forecast_hours_available?: number;
+    station_count?: number;
+    stations_no_go?: number;
+    stations_marginal?: number;
+    limiting_factors?: string[];
     [k: string]: unknown;
   };
   station_features: FeatureCollection;
@@ -189,25 +193,16 @@ export interface TimelineSnapshotResponse {
   };
 }
 
-// ─── /api/plans + /api/operations ─────────────────────────────────────────
-
-export interface PlanSummary {
-  id: string;
-  name: string;
-  bbox?: [number, number, number, number];
-  active_layers?: string[];
-  notes?: string;
-  role?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface Plan extends PlanSummary {
-  drawn_features: FeatureCollection;
-}
-
-export interface PlanVersionSummary {
 // ── Plans & versions ──────────────────────────────────────────────────────────
+
+export interface Phase {
+  id: number;
+  name: string;
+  drawn_features: FeatureCollection;
+  active_layers: string[];
+  notes: string;
+}
+
 
 export interface Plan {
   id: string;
@@ -238,15 +233,18 @@ export interface PlanVersion {
   label: string;
   role?: string;
   saved_at: string;
-}
-
-export interface PlanVersion extends PlanVersionSummary {
-  bbox?: [number, number, number, number];
+  bbox: [number, number, number, number] | null;
   drawn_features: FeatureCollection;
-  active_layers?: string[];
-  notes?: string;
+  active_layers: string[];
+  notes: string;
+  /** Snapshot of live data captured at save time (fmi, astronomy, etc.). */
   conditions_snapshot?: Record<string, unknown>;
 }
+
+/** Summary returned by GET /api/plans/{id}/versions (no drawn_features). */
+export type PlanVersionSummary = Omit<PlanVersion, 'drawn_features'>;
+
+// ── Operations ───────────────────────────────────────────────────────────────
 
 export interface OperationPrediction {
   notes?: string;
@@ -270,15 +268,7 @@ export interface Operation {
   tags?: string[];
   created_at?: string;
   updated_at?: string;
-  bbox: [number, number, number, number] | null;
-  drawn_features: FeatureCollection;
-  active_layers: string[];
-  notes: string;
-  conditions_snapshot?: Record<string, unknown>;
 }
-
-/** Summary returned by GET /api/plans/{id}/versions (no drawn_features). */
-export type PlanVersionSummary = Omit<PlanVersion, 'drawn_features'>;
 
 export interface CreatePlanBody {
   name: string;

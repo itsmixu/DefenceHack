@@ -17,8 +17,6 @@ const baseColorByLayer: Record<LayerKey, string> = {
   astronomy: '#facc15',
   exposure: '#dc2626',
   mcoo: '#16a34a',
-  syke: '#2563eb',
-  astronomy: '#fbbf24',
 };
 
 // Cell tower colour by radio technology.

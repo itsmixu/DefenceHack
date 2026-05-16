@@ -100,9 +100,9 @@ function DroneConditionsPanel() {
                   {ratingLabel}
                 </div>
                 <div>
-                  {data.summary.limiting_factors?.length > 0 && (
+                  {(data.summary.limiting_factors?.length ?? 0) > 0 && (
                     <ul className="space-y-0.5">
-                      {data.summary.limiting_factors.slice(0, 3).map((f, i) => (
+                      {data.summary.limiting_factors!.slice(0, 3).map((f, i) => (
                         <li key={i} className="text-[10px] text-amber-200/80">· {f}</li>
                       ))}
                     </ul>
