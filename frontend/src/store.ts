@@ -389,7 +389,7 @@ export const MILITARY_FEATURE_TYPES = [
 export type MilitaryFeatureType = typeof MILITARY_FEATURE_TYPES[number]['type'];
 
 // Active map tool — only one can be active at a time
-export type ActiveMapTool = 'arrow' | 'symbol' | 'shape' | 'delete' | null;
+export type ActiveMapTool = 'arrow' | 'symbol' | 'shape' | 'delete' | 'ruler' | null;
 
 interface TacticalState {
   activeTool: ActiveMapTool;

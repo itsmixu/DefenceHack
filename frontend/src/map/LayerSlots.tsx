@@ -124,18 +124,18 @@ function SlotButton({ index }: SlotButtonProps) {
 
 export default function LayerSlots() {
   return (
-    <div className="pointer-events-auto absolute bottom-3 right-3 z-[1000] flex items-center gap-2 rounded border border-white/15 bg-black/95 p-2 text-white shadow-[0_10px_28px_rgba(0,0,0,0.45)]">
-      <span className="font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-white/55">
-        click: load/save
-        <br />
-        hold: overwrite
-      </span>
-      <div className="flex gap-1.5">
+    <div className="rounded border border-white/10 bg-black/30 p-2 text-white">
+      <div className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
+        Layer Presets
+      </div>
+      <div className="flex justify-center gap-1.5">
         {[0, 1, 2, 3, 4].map((i) => (
           <SlotButton key={i} index={i} />
         ))}
       </div>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">Presets</span>
+      <div className="mt-1.5 text-center font-mono text-[9px] uppercase tracking-[0.06em] text-white/45">
+        click: load/save · hold: overwrite
+      </div>
     </div>
   );
 }

@@ -17,7 +17,7 @@
 import { useState, useMemo, useRef } from 'react';
 import ms from 'milsymbol';
 import {
-  MoveUpRight, Shield, Shapes, Eraser, X, Search,
+  MoveUpRight, Shield, Shapes, Eraser, X, Search, Ruler,
 } from 'lucide-react';
 import { useTacticalStore, MILITARY_FEATURE_TYPES } from '../store';
 import type { MilitaryFeatureType } from '../store';
@@ -499,6 +499,7 @@ export default function MapToolbar() {
   const activeTool     = useTacticalStore((s) => s.activeTool);
   const setActiveTool  = useTacticalStore((s) => s.setActiveTool);
   const isArrowMode    = useTacticalStore((s) => s.isArrowMode);
+  const isRulerMode    = activeTool === 'ruler';
   const isDeleteMode   = useTacticalStore((s) => s.isDeleteMode);
   const arrowColor     = useTacticalStore((s) => s.arrowColor);
   const pendingSymbol  = useTacticalStore((s) => s.pendingSymbol);
@@ -506,7 +507,7 @@ export default function MapToolbar() {
   const [openPanel, setOpenPanel] = useState<ActiveMapTool>(null);
 
   function toggleTool(tool: ActiveMapTool) {
-    if (openPanel === tool || (tool === 'arrow' && isArrowMode) || (tool === 'delete' && isDeleteMode)) {
+    if (openPanel === tool || (tool === 'arrow' && isArrowMode) || (tool === 'ruler' && isRulerMode) || (tool === 'delete' && isDeleteMode)) {
       // Click active tool → close / deactivate
       setOpenPanel(null);
       setActiveTool(null);
@@ -587,6 +588,18 @@ export default function MapToolbar() {
               label="Arrow"
               active={isArrowMode}
               onClick={() => toggleTool('arrow')}
+            />
+          </div>
+          <div className="h-8 w-px" style={{ background: '#393939' }} />
+        </div>
+
+        <div className="flex items-center">
+          <div className="px-1">
+            <ToolBtn
+              icon={<Ruler size={18} />}
+              label="Ruler"
+              active={isRulerMode}
+              onClick={() => toggleTool('ruler')}
             />
           </div>
           <div className="h-8 w-px" style={{ background: '#393939' }} />

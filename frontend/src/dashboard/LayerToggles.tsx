@@ -1,8 +1,11 @@
-import { useBboxStore, useLayerStore } from '../store';
+import { RefreshCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBboxStore, useFeatureCacheStore, useLayerStore } from '../store';
 import type { LayerKey, LayerStatus } from '../api/types';
 import { useOsmPoiFilterStore } from '../store';
 import { OSM_POI_CATEGORIES } from '../map/osmPoi';
 import { MIN_ZOOM_BY_LAYER, isLayerSuppressedByZoom } from '../map/layerLoadLimits';
+import LayerSlots from '../map/LayerSlots';
 import SourceStatusList from './SourceStatusList';
 
 interface LayerEntry {
@@ -44,12 +47,32 @@ export default function LayerToggles() {
   const toggleOsm = useOsmPoiFilterStore((s) => s.toggle);
   const setAllOsm = useOsmPoiFilterStore((s) => s.setAll);
   const clearAllOsm = useOsmPoiFilterStore((s) => s.clearAll);
+  const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
+  const queryClient = useQueryClient();
+
+  const handleForceReload = () => {
+    clearAllFeatures();
+    queryClient.invalidateQueries({ queryKey: ['layer'] });
+  };
 
   return (
     <div>
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
-        Toggle layers. Each layer fetches when the map viewport changes.
-      </p>
+      <div className="mb-3">
+        <LayerSlots />
+      </div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
+          Toggle layers. Each layer fetches when the map viewport changes.
+        </p>
+        <button
+          type="button"
+          onClick={handleForceReload}
+          className="shrink-0 rounded border border-white/20 bg-white/[0.06] p-1 text-white/85 hover:bg-white/[0.14] hover:text-white"
+          title="Discard cached features and refetch every active layer"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      </div>
       <ul className="space-y-1">
         {LAYERS.map((l) => {
           const isOsm = l.id === 'osm';

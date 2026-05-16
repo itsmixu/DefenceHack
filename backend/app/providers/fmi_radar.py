@@ -36,8 +36,15 @@ from __future__ import annotations
 import asyncio
 import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+# FMI radar mosaics publish on a 5-minute cadence with some upstream latency.
+# Asking for a timestamp newer than the latest published frame triggers a
+# WMS `InvalidDimensionValue` for `time`. We floor radar timestamps to the
+# previous 5-min mark and back off one frame for safety.
+_RADAR_STEP_MIN = 5
+_RADAR_SAFETY_LAG = timedelta(minutes=5)
 
 import httpx
 
@@ -129,6 +136,19 @@ def _iso_z(t: datetime | None) -> str | None:
     return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _snap_radar_time(t: datetime) -> datetime:
+    """Snap a timestamp to the latest published radar frame.
+
+    FMI radar mosaics advance every 5 minutes and the most recent frame
+    may lag wall-clock by a few minutes. We subtract a safety lag and
+    floor to a 5-min boundary so the resulting `time=` is guaranteed to
+    fall on an existing dimension value.
+    """
+    t = (t - _RADAR_SAFETY_LAG).astimezone(timezone.utc)
+    minute = (t.minute // _RADAR_STEP_MIN) * _RADAR_STEP_MIN
+    return t.replace(minute=minute, second=0, microsecond=0)
+
+
 # Module-global async client — reused across requests for connection pooling.
 _client: httpx.AsyncClient | None = None
 _client_lock = asyncio.Lock()
@@ -179,9 +199,12 @@ async def fetch_weather_tile(
         "format":      "image/png",
         "transparent": "true",
     }
-    iso_t = _iso_z(t)
-    if iso_t and spec.get("time_aware"):
-        params["time"] = iso_t
+    if t is not None and spec.get("time_aware"):
+        if spec.get("category") == "radar":
+            t = _snap_radar_time(t)
+        iso_t = _iso_z(t)
+        if iso_t:
+            params["time"] = iso_t
 
     client = await _get_client()
     resp = await client.get(WMS_BASE, params=params)

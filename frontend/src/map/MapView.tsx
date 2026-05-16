@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import BboxTracker from './BboxTracker';
 import SourceLayer from './SourceLayer';
 import DrawControl from '../drawing/DrawControl';
 import ArrowControl from '../drawing/ArrowControl';
+import RulerControl from '../drawing/RulerControl';
 import SymbolControl from '../drawing/SymbolControl';
-import LayerSlots from './LayerSlots';
 import ZoneControls from './ZoneControls';
 import MapToolbar from './MapToolbar';
 import { basemaps } from './basemaps';
@@ -57,7 +57,6 @@ export default function MapView() {
   const backendUnavailable = useBackendStatusStore((s) => s.unavailable);
   const backendReason = useBackendStatusStore((s) => s.reason);
 
-  const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
   const clearFeature = useFeatureCacheStore((s) => s.clear);
   const rangeStartMs = useTimelineStore((s) => s.rangeStartMs);
   const rangeEndMs = useTimelineStore((s) => s.rangeEndMs);
@@ -152,11 +151,6 @@ export default function MapView() {
     });
   };
 
-  const handleForceReload = () => {
-    clearAllFeatures();
-    queryClient.invalidateQueries({ queryKey: ['layer'] });
-  };
-
   return (
     <div className="relative h-full w-full">
       <MapContainer
@@ -210,11 +204,11 @@ export default function MapView() {
         <BboxTracker />
         <DrawControl />
         <ArrowControl />
+        <RulerControl />
         <SymbolControl />
         {ALL_LAYERS.map((id) => (active[id] ? <SourceLayer key={id} layer={id} /> : null))}
       </MapContainer>
 
-      <LayerSlots />
       <ZoneControls />
 
       {/* ── Bottom drawing toolbar ── */}
@@ -248,25 +242,15 @@ export default function MapView() {
       )}
 
       <div className="pointer-events-auto absolute right-3 top-24 z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => setBasemapPanelOpen((s) => !s)}
-            className="flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70 hover:text-white"
-            title={basemapPanelOpen ? 'Collapse basemap stack' : 'Expand basemap stack'}
-          >
-            Basemap Stack
-            {basemapPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={handleForceReload}
-            className="rounded border border-white/20 bg-white/[0.06] p-1 text-white/85 hover:bg-white/[0.14] hover:text-white"
-            title="Discard cached features and refetch every active layer"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setBasemapPanelOpen((s) => !s)}
+          className="flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70 hover:text-white"
+          title={basemapPanelOpen ? 'Collapse basemap' : 'Expand basemap'}
+        >
+          Basemap
+          {basemapPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
 
         {basemapPanelOpen &&
           basemaps.map((b) => {
