@@ -7,9 +7,12 @@ export type SourceId =
   | 'mml_contours'
   | 'statfin'
   | 'fmi'
+  | 'fmi_forecast'
   | 'opencellid'
   | 'n2yo'
-  | 'exposure';
+  | 'exposure'
+  | 'syke'
+  | 'astronomy';
 
 export type LayerKey = SourceId | 'mcoo';
 

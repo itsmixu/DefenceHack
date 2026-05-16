@@ -47,6 +47,18 @@ export function getTerrainEffects(query: BboxQuery): Promise<TerrainEffectsRespo
   return fetchJson<TerrainEffectsResponse>(`/api/analyze/terrain-effects${buildQuery(query)}`);
 }
 
+export interface DroneRating { current_rating: 'go' | 'marginal' | 'no-go'; limiting_factors: string[]; station_count: number }
+export interface DroneConditionsResponse {
+  summary: DroneRating & { stations_no_go: number; stations_marginal: number };
+  station_features: { type: string; features: Array<{ geometry: unknown; properties: Record<string, unknown> }> };
+  forecast_timeline: Array<{ time: string; drone_rating: string; wind_ms: number | null; wind_gust_ms: number | null; temp_c: number | null }>;
+  thresholds: Record<string, unknown>;
+}
+
+export function getDroneConditions(query: BboxQuery): Promise<DroneConditionsResponse> {
+  return fetchJson<DroneConditionsResponse>(`/api/analyze/drone-conditions${buildQuery(query)}`);
+}
+
 // ── Plans ─────────────────────────────────────────────────────────────────────
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {

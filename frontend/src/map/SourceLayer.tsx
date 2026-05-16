@@ -21,7 +21,10 @@ import { getStyleForLayer } from './layerStyles';
 // All other layers (mml, digiroad, opencellid, n2yo, exposure, mcoo) are static
 // and must NOT be re-fetched when the timeline scrubber moves — doing so would
 // erase their cache and cause unnecessary network requests.
-const TIME_AWARE: Set<LayerKey> = new Set(['fmi', 'osm']);
+// astronomy: computed locally by astral — any date, zero latency.
+// fmi_forecast: different forecast at different base times.
+// statfin: annual resolution — skip (same data all year, not useful to re-fetch hourly).
+const TIME_AWARE: Set<LayerKey> = new Set(['fmi', 'osm', 'astronomy', 'fmi_forecast']);
 
 interface Props {
   layer: LayerKey;

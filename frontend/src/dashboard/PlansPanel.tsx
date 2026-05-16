@@ -48,7 +48,8 @@ const VERSION_PRESETS = [
 
 const ALL_LAYER_KEYS: LayerKey[] = [
   'osm', 'digiroad', 'mml', 'mml_contours', 'statfin',
-  'fmi', 'opencellid', 'n2yo', 'exposure', 'mcoo',
+  'syke', 'fmi', 'fmi_forecast', 'astronomy',
+  'opencellid', 'n2yo', 'exposure', 'mcoo',
 ];
 
 const MAX_PHASES = 5;
