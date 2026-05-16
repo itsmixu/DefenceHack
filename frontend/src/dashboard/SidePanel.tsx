@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { ClipboardList, Layers } from 'lucide-react';
+import { Activity, BookOpen, ClipboardList, Layers, Crosshair } from 'lucide-react';
 import LayerToggles from './LayerToggles';
+import SourceStatusList from './SourceStatusList';
 import DrawnList from './DrawnList';
 import PlansPanel from './PlansPanel';
+import TacticalTools from './TacticalTools';
 
-type Tab = 'layers' | 'drawn';
+type Tab = 'layers' | 'sources' | 'drawn' | 'plans' | 'tools';
 
 export default function SidePanel() {
   const [tab, setTab] = useState<Tab>('layers');
@@ -16,24 +18,20 @@ export default function SidePanel() {
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">DefenceHack — Junction</p>
       </header>
 
-      <nav className="grid grid-cols-2 border-b border-white/10 text-[10px] uppercase tracking-[0.16em]">
-        <TabBtn
-          active={tab === 'layers'}
-          onClick={() => setTab('layers')}
-          icon={<Layers size={14} />}
-          label="Layers"
-        />
-        <TabBtn
-          active={tab === 'drawn'}
-          onClick={() => setTab('drawn')}
-          icon={<ClipboardList size={14} />}
-          label="Drawn"
-        />
+      <nav className="grid grid-cols-5 border-b border-white/10 text-[10px] uppercase tracking-[0.14em]">
+        <TabBtn active={tab === 'layers'}  onClick={() => setTab('layers')}  icon={<Layers size={12} />}        label="Layers"  />
+        <TabBtn active={tab === 'sources'} onClick={() => setTab('sources')} icon={<Activity size={12} />}      label="Sources" />
+        <TabBtn active={tab === 'drawn'}   onClick={() => setTab('drawn')}   icon={<ClipboardList size={12} />} label="Drawn"   />
+        <TabBtn active={tab === 'plans'}   onClick={() => setTab('plans')}   icon={<BookOpen size={12} />}      label="Plans"   />
+        <TabBtn active={tab === 'tools'}   onClick={() => setTab('tools')}   icon={<Crosshair size={12} />}     label="Tools"   />
       </nav>
 
       <main className="flex-1 overflow-y-auto p-3 text-sm text-white/90">
-        {tab === 'layers' && <LayerToggles />}
-        {tab === 'drawn' && <DrawnList />}
+        {tab === 'layers'  && <LayerToggles />}
+        {tab === 'sources' && <SourceStatusList />}
+        {tab === 'drawn'   && <DrawnList />}
+        {tab === 'plans'   && <PlansPanel />}
+        {tab === 'tools'   && <TacticalTools />}
       </main>
     </div>
   );
@@ -50,14 +48,14 @@ function TabBtn({ active, onClick, icon, label }: TabProps) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-center gap-1 px-2 py-2 transition ${
+      className={`flex flex-col items-center justify-center gap-0.5 px-1 py-2 transition ${
         active
           ? 'border-b border-white bg-white text-black shadow-[inset_0_-1px_0_rgba(255,255,255,0.9)]'
           : 'text-white/60 hover:bg-white/[0.06] hover:text-white'
       }`}
     >
       {icon}
-      {label}
+      <span className="text-[8px]">{label}</span>
     </button>
   );
 }

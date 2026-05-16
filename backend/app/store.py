@@ -46,21 +46,18 @@ def save_plan(data: dict[str, Any]) -> dict[str, Any]:
         "created_at": data.get("created_at", now),
         "updated_at": now,
         "bbox": data.get("bbox"),
-        # GeoJSON FeatureCollection of shapes drawn by the user on the map.
-        # Each feature should set properties.feature_type to one of:
-        #   "AOI" — Area of Operations / Area of Interest boundary
-        #   "NAI" — Named Area of Interest (intelligence collection target)
-        #   "TAI" — Target Area of Interest (action / engagement zone)
-        #   "DP"  — Decision Point (condition-triggered branch on the map)
-        #   "annotation" — freeform note shape, no doctrinal meaning
-        # Frontend colour-codes these (AOI/NAI/TAI/DP convention from IPB
-        # doctrine: AOI thick black, NAI dashed blue, TAI dashed red, DP
-        # diamond marker). Other shapes default to "annotation".
         "drawn_features": data.get("drawn_features", {"type": "FeatureCollection", "features": []}),
-        # Which layer toggles were active when the plan was saved.
         "active_layers": data.get("active_layers", []),
         "notes": data.get("notes", ""),
-        "role": data.get("role"),  # which user role saved this plan
+        "role": data.get("role"),
+        # Command hierarchy
+        "unit": data.get("unit", ""),                    # unit name, e.g. "1 Platoon"
+        "commander_name": data.get("commander_name", ""),
+        "parent_plan_id": data.get("parent_plan_id"),    # links to parent commander's plan
+        # Phase planning — up to 5 phases, each with own drawn shapes + layers
+        "phases": data.get("phases", []),
+        # Conditions captured at save time (FMI weather, astronomy, etc.)
+        "conditions_snapshot": data.get("conditions_snapshot"),
     }
     (PLANS_DIR / f"{plan_id}.json").write_text(json.dumps(plan))
     return plan
@@ -71,12 +68,36 @@ def get_plan(plan_id: str) -> dict[str, Any] | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
-def list_plans() -> list[dict[str, Any]]:
+def list_plans(parent_id: str | None = None, include_children: bool = False) -> list[dict[str, Any]]:
+    """List plans.
+
+    parent_id=None and include_children=False → only top-level plans (parent_plan_id is null).
+    parent_id=<id>                             → only direct children of that plan.
+    include_children=True (with parent_id=None) → all plans, flat list.
+    """
     plans = []
     for p in sorted(PLANS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
         try:
             plan = json.loads(p.read_text())
-            # Return summary only (omit drawn_features to keep list response small).
+            pid = plan.get("parent_plan_id")
+            if parent_id is not None:
+                if pid != parent_id:
+                    continue
+            elif not include_children:
+                if pid:  # skip children in default listing
+                    continue
+            plans.append({k: v for k, v in plan.items() if k != "drawn_features"})
+        except (json.JSONDecodeError, OSError):
+            continue
+    return plans
+
+
+def list_all_plans() -> list[dict[str, Any]]:
+    """Return all plans flat (used for hierarchy tree building)."""
+    plans = []
+    for p in sorted(PLANS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            plan = json.loads(p.read_text())
             plans.append({k: v for k, v in plan.items() if k != "drawn_features"})
         except (json.JSONDecodeError, OSError):
             continue
