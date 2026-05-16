@@ -1,7 +1,11 @@
-import { useLayerStore } from '../store';
+import { RefreshCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBboxStore, useFeatureCacheStore, useLayerStore } from '../store';
 import type { LayerKey, LayerStatus } from '../api/types';
 import { useOsmPoiFilterStore } from '../store';
 import { OSM_POI_CATEGORIES } from '../map/osmPoi';
+import { MIN_ZOOM_BY_LAYER, isLayerSuppressedByZoom } from '../map/layerLoadLimits';
+import LayerSlots from '../map/LayerSlots';
 import SourceStatusList from './SourceStatusList';
 
 interface LayerEntry {
@@ -27,9 +31,9 @@ const LAYERS: LayerEntry[] = [
 ];
 
 const dotForStatus = (s?: LayerStatus) => {
-  if (!s) return 'bg-white/35';
+  if (!s || s === 'unknown') return 'bg-white/35';
   if (s === 'ok') return 'bg-emerald-300';
-  if (s === 'unavailable') return 'bg-amber-300';
+  if (s === 'unavailable' || s === 'partial' || s === 'degraded') return 'bg-amber-300';
   return 'bg-red-300';
 };
 
@@ -38,19 +42,42 @@ export default function LayerToggles() {
   const status = useLayerStore((s) => s.status);
   const loading = useLayerStore((s) => s.loading);
   const toggle = useLayerStore((s) => s.toggle);
+  const zoom = useBboxStore((s) => s.zoom);
   const osmEnabled = useOsmPoiFilterStore((s) => s.enabled);
   const toggleOsm = useOsmPoiFilterStore((s) => s.toggle);
   const setAllOsm = useOsmPoiFilterStore((s) => s.setAll);
   const clearAllOsm = useOsmPoiFilterStore((s) => s.clearAll);
+  const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
+  const queryClient = useQueryClient();
+
+  const handleForceReload = () => {
+    clearAllFeatures();
+    queryClient.invalidateQueries({ queryKey: ['layer'] });
+  };
 
   return (
     <div>
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
-        Toggle layers. Each layer fetches when the map viewport changes.
-      </p>
+      <div className="mb-3">
+        <LayerSlots />
+      </div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
+          Toggle layers. Each layer fetches when the map viewport changes.
+        </p>
+        <button
+          type="button"
+          onClick={handleForceReload}
+          className="shrink-0 rounded border border-white/20 bg-white/[0.06] p-1 text-white/85 hover:bg-white/[0.14] hover:text-white"
+          title="Discard cached features and refetch every active layer"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      </div>
       <ul className="space-y-1">
         {LAYERS.map((l) => {
           const isOsm = l.id === 'osm';
+          const minZoom = MIN_ZOOM_BY_LAYER[l.id];
+          const suppressed = !!active[l.id] && isLayerSuppressedByZoom(l.id, zoom);
           return (
             <li key={l.id} className="rounded border border-white/10 bg-black/30 px-2 py-1.5 hover:bg-white/[0.04]">
               <div className="flex items-center justify-between">
@@ -65,7 +92,14 @@ export default function LayerToggles() {
                     {l.hint && <span className="font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">{l.hint}</span>}
                   </span>
                 </label>
-                {active[l.id] && loading[l.id] ? (
+                {suppressed ? (
+                  <span
+                    className="rounded border border-amber-300/50 bg-amber-300/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-amber-200"
+                    title={`Zoom ≥ ${minZoom} to load this layer (current ${zoom ?? '?'})`}
+                  >
+                    zoom ≥ {minZoom}
+                  </span>
+                ) : active[l.id] && loading[l.id] ? (
                   <span
                     className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
                     title="loading…"

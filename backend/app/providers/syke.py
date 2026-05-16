@@ -35,6 +35,7 @@ import httpx
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -126,22 +127,22 @@ class SYKEProvider(Provider):
         all_features: list[dict[str, Any]] = []
         errors: list[str] = []
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for endpoint_url, type_name, category, mcoo in LAYERS:
-                try:
-                    resp = await client.get(
-                        endpoint_url,
-                        params=_wfs_params(type_name, bbox),
-                        headers={"User-Agent": "DefenceHack-IPB/0.1"},
-                    )
-                    resp.raise_for_status()
-                    payload = resp.json()
-                    feats = _features_from_geojson(payload, category, mcoo)
-                    all_features.extend(feats)
-                except httpx.HTTPError as exc:
-                    errors.append(f"{category}: {exc}")
-                except (ValueError, KeyError) as exc:
-                    errors.append(f"{category}: parse error {exc}")
+        client = get_client()
+        for endpoint_url, type_name, category, mcoo in LAYERS:
+            try:
+                resp = await client.get(
+                    endpoint_url,
+                    params=_wfs_params(type_name, bbox),
+                    timeout=30.0,
+                )
+                resp.raise_for_status()
+                payload = resp.json()
+                feats = _features_from_geojson(payload, category, mcoo)
+                all_features.extend(feats)
+            except httpx.HTTPError as exc:
+                errors.append(f"{category}: {exc}")
+            except (ValueError, KeyError) as exc:
+                errors.append(f"{category}: parse error {exc}")
 
         if not all_features and errors:
             self.mark("unavailable", "; ".join(errors))

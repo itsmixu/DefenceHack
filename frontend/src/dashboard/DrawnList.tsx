@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MoveUpRight, Shield, Trash2 } from 'lucide-react';
+import { MoveUpRight, Shield, Trash2, Ruler } from 'lucide-react';
 import ms from 'milsymbol';
 import { useDrawnStore } from '../store';
 
@@ -50,8 +50,9 @@ export default function DrawnList() {
   }
 
   const arrows  = features.filter((f) => f.properties?.feature_type === 'ARROW');
+  const rulers  = features.filter((f) => f.properties?.feature_type === 'RULER');
   const symbols = features.filter((f) => f.properties?.feature_type === 'SYMBOL');
-  const shapes  = features.filter((f) => !['ARROW', 'SYMBOL'].includes(f.properties?.feature_type as string));
+  const shapes  = features.filter((f) => !['ARROW', 'RULER', 'SYMBOL'].includes(f.properties?.feature_type as string));
 
   return (
     <div className="space-y-3">
@@ -115,6 +116,44 @@ export default function DrawnList() {
                   <button
                     onClick={() => removeFeature(String(f.id))}
                     title="Delete arrow"
+                    className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* Rulers section */}
+      {rulers.length > 0 && (
+        <section>
+          <p className="mb-1.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">
+            <Ruler size={9} />
+            Rulers ({rulers.length})
+          </p>
+          <ul className="space-y-1">
+            {rulers.map((f) => {
+              const p = f.properties as { distance_m?: number };
+              const m = p.distance_m ?? 0;
+              const label = m >= 10000 ? `${(m / 1000).toFixed(1)} km`
+                : m >= 1000 ? `${(m / 1000).toFixed(2)} km`
+                : `${Math.round(m)} m`;
+              return (
+                <li
+                  key={String(f.id)}
+                  className="flex items-center gap-2 rounded border border-amber-300/25 bg-black/30 px-2 py-1.5"
+                >
+                  <Ruler size={14} className="shrink-0 text-amber-300" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono text-[10px] font-semibold text-white/85">Ruler</div>
+                    <div className="font-mono text-[9px] text-amber-200/80">{label}</div>
+                  </div>
+                  <button
+                    onClick={() => removeFeature(String(f.id))}
+                    title="Delete ruler"
                     className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
                   >
                     <Trash2 size={11} />

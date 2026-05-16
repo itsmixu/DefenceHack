@@ -30,6 +30,7 @@ import httpx
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -46,7 +47,6 @@ DEFAULT_PARAMETERS: tuple[str, ...] = (
     "humidity",
     "pressure",
     "precipitation1h",
-    "precipitationamount",
     "visibility",
     "totalcloudcover",
     "snowdepth",
@@ -228,13 +228,10 @@ class FMIProvider(Provider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    WFS_URL, params=params,
-                    headers={"User-Agent": "DefenceHack-IPB/0.1"},
-                )
-                resp.raise_for_status()
-                xml_text = resp.text
+            client = get_client()
+            resp = await client.get(WFS_URL, params=params, timeout=30.0)
+            resp.raise_for_status()
+            xml_text = resp.text
         except httpx.HTTPError as e:
             self.mark("unavailable", f"FMI WFS error: {e}")
             return empty_collection(

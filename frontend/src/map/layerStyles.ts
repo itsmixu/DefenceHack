@@ -2,6 +2,8 @@ import L from 'leaflet';
 import type { GeoJSONOptions, PathOptions, StyleFunction } from 'leaflet';
 import type { LayerKey } from '../api/types';
 import { getOsmPoiMeta } from './osmPoi';
+import { buildPopup, fmtInt, fmtPct } from './popupHelpers';
+import { zoomScale } from './zoomScale';
 
 const baseColorByLayer: Record<LayerKey, string> = {
   osm: '#ef4444',
@@ -54,8 +56,9 @@ const formatValue = (v: unknown): string => {
   return String(v);
 };
 
-export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
+export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSONOptions {
   const baseColor = baseColorByLayer[layer];
+  const scale = zoomScale(zoom);
 
   const style: StyleFunction = (feature) => {
     const p = (feature?.properties ?? {}) as Record<string, unknown>;
@@ -106,9 +109,13 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         break;
       }
       case 'statfin': {
-        const pop = Number(p.population ?? 0);
-        const area = Number(p.area_km2 ?? 1);
-        const density = pop / Math.max(area, 0.0001);
+        // Paavo polygons — colour by population density (people / km²).
+        // Backend emits raw Finnish field names: he_vakiy = total population,
+        // pinta_ala = area in m².
+        const pop = Number(p.he_vakiy ?? 0);
+        const areaM2 = Number(p.pinta_ala ?? 0);
+        const areaKm2 = areaM2 > 0 ? areaM2 / 1_000_000 : 1;
+        const density = pop / Math.max(areaKm2, 0.0001);
         const t = Math.min(density / 500, 1);
         const r = Math.round(168 + (88 - 168) * t);
         const g = Math.round(85 + (28 - 85) * t);
@@ -132,12 +139,32 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         break;
       }
       case 'starlink': {
-        // Footprint polygon — very faint horizon circle showing coverage area.
-        opts.color = '#a855f7';
-        opts.fillColor = '#a855f7';
-        opts.fillOpacity = 0.04;
-        opts.weight = 1;
-        opts.dashArray = '4 6';
+        // Only the footprint polygons should get this faint horizon style.
+        // Position points are Leaflet circleMarkers (also path-styled by this
+        // function); without this guard the circleMarker's bright fill from
+        // pointToLayer would be overridden with fillOpacity=0.04, making the
+        // satellite dot effectively invisible.
+        const isFootprint =
+          (p.feature_type === 'footprint') || feature?.geometry?.type === 'Polygon';
+        if (isFootprint) {
+          opts.color = '#a855f7';
+          opts.fillColor = '#a855f7';
+          opts.fillOpacity = 0.04;
+          opts.weight = 1;
+          opts.dashArray = '4 6';
+        }
+        // For position points: leave the bright defaults from pointToLayer
+        // alone — Leaflet still calls style() on circleMarkers, so returning
+        // a clean PathOptions here would also override them. Use the elevation-
+        // tinted colour set in pointToLayer instead.
+        else {
+          const elev = Number(p.elevation_deg ?? 0);
+          const c = elev > 45 ? '#d946ef' : elev > 20 ? '#a855f7' : '#7c3aed';
+          opts.color = '#ffffff';      // white ring (matches pointToLayer)
+          opts.fillColor = c;
+          opts.fillOpacity = 0.9;
+          opts.weight = 2;
+        }
         break;
       }
       case 'syke': {
@@ -152,12 +179,19 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         break;
       }
       case 'fmi_forecast': {
-        // Forecast point-in-time features — semi-transparent, light blue.
-        opts.color = '#38bdf8';
-        opts.fillColor = '#38bdf8';
-        opts.fillOpacity = 0.15;
-        opts.weight = 1;
-        opts.dashArray = '4 4';
+        // Forecast zones — color by drone rating (doctrinal fusion of
+        // wind/temp/visibility/ceiling). Green=go, amber=marginal, red=no-go.
+        const rating = String(p.drone_rating ?? '').toLowerCase();
+        const fill =
+          rating === 'no-go' ? '#dc2626' :
+          rating === 'marginal' ? '#f59e0b' :
+          rating === 'go' ? '#16a34a' :
+          '#38bdf8';
+        opts.color = fill;
+        opts.fillColor = fill;
+        opts.fillOpacity = 0.22;
+        opts.weight = 1.5;
+        opts.dashArray = '4 3';
         break;
       }
       case 'astronomy': {
@@ -183,12 +217,15 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       const meta = getOsmPoiMeta(String(p.category ?? ''));
       const icon = meta?.icon ?? '•';
       const iconColor = meta?.color ?? '#ef4444';
+      const size = Math.round(20 * scale);
+      const half = Math.round(size / 2);
+      const fontSize = Math.max(8, Math.round(12 * scale));
       const marker = L.divIcon({
         className: '',
-        html: `<div style="width:20px;height:20px;border-radius:9999px;background:#fff;border:2px solid ${iconColor};display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1">${icon}</div>`,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10],
-        popupAnchor: [0, -10],
+        html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:#fff;border:2px solid ${iconColor};display:flex;align-items:center;justify-content:center;font-size:${fontSize}px;line-height:1">${icon}</div>`,
+        iconSize: [size, size],
+        iconAnchor: [half, half],
+        popupAnchor: [0, -half],
       });
       return L.marker(latlng, { icon: marker });
     } else if (layer === 'fmi') {
@@ -216,7 +253,7 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
     }
 
     return L.circleMarker(latlng, {
-      radius,
+      radius: radius * scale,
       color: '#fff',       // white border makes dots pop on any background
       weight: 2,
       fillColor: color,
@@ -268,7 +305,15 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
 
     if (layer === 'opencellid') return; // coverage polygons don't need their own popup
 
-    if (layer === 'starlink' && props.feature_type === 'position') {
+    // Starlink: bind the rich satellite popup to every Point feature regardless of
+    // whether feature_type is set to 'position' (defensive — provider currently
+    // emits feature_type, but the popup is the right one for any sat-position
+    // point). Footprint polygons fall through to the early-return below.
+    const isStarlinkPoint =
+      layer === 'starlink' &&
+      (props.feature_type === 'position' ||
+        (feature.geometry?.type === 'Point' && props.feature_type !== 'footprint'));
+    if (isStarlinkPoint) {
       const alt   = props.altitude_km  != null ? `${Number(props.altitude_km).toFixed(0)} km`  : '—';
       const elev  = props.elevation_deg != null ? `${Number(props.elevation_deg).toFixed(1)}°`  : '—';
       const speed = props.speed_kmh     != null ? `${Number(props.speed_kmh / 1000).toFixed(1)} km/s` : '—';
@@ -325,17 +370,363 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       return;
     }
 
+    if (layer === 'fmi') {
+      const p = props as Record<string, unknown>;
+      const time = p.time ? String(p.time) : '';
+      // Show HH:MM UTC from the ISO timestamp.
+      const hhmm = time.length >= 16 ? `${time.slice(11, 16)} UTC` : '';
+
+      const tempC      = Number(p.temperature_c ?? NaN);
+      const dewC       = Number(p.dewpoint_c ?? NaN);
+      const chillC     = Number(p.wind_chill_c ?? NaN);
+      const humidity   = Number(p.humidity_pct ?? NaN);
+      const pressure   = Number(p.pressure_hpa ?? NaN);
+      const windMs     = Number(p.wind_speed_ms ?? NaN);
+      const windCard   = p.wind_direction_card ? String(p.wind_direction_card) : '';
+      const windDeg    = Number(p.wind_direction_deg ?? NaN);
+      const gustMs     = Number(p.wind_gust_ms ?? NaN);
+      const precip     = Number(p.precipitation_mmh ?? NaN);
+      const precipKind = p.precip_intensity ? String(p.precip_intensity) : '';
+      const visM       = Number(p.visibility_m ?? NaN);
+      const cloud      = Number(p.cloud_cover_pct ?? NaN);
+      const snow       = Number(p.snow_depth_cm ?? NaN);
+
+      // Headline temperature with wind-chill suffix when it actually differs.
+      let tempValue: string | undefined;
+      if (Number.isFinite(tempC)) {
+        const main = `${tempC.toFixed(1)}°C`;
+        const chillDiffers = Number.isFinite(chillC) && Math.abs(chillC - tempC) >= 1;
+        tempValue = chillDiffers
+          ? `${main}`
+          : main;
+      }
+      const chillHint = Number.isFinite(chillC) && Number.isFinite(tempC) && Math.abs(chillC - tempC) >= 1
+        ? `feels ${chillC.toFixed(0)}°C`
+        : undefined;
+
+      // Wind: "6 m/s NE (gust 9)"
+      let windValue: string | undefined;
+      if (Number.isFinite(windMs)) {
+        const dir = windCard || (Number.isFinite(windDeg) ? `${Math.round(windDeg)}°` : '');
+        windValue = dir ? `${windMs.toFixed(1)} m/s ${dir}` : `${windMs.toFixed(1)} m/s`;
+      }
+      const gustHint = Number.isFinite(gustMs) ? `gust ${gustMs.toFixed(0)}` : undefined;
+
+      // Conditions: "Cloud 40% · Light rain"
+      const condParts: string[] = [];
+      if (Number.isFinite(cloud)) condParts.push(`Cloud ${Math.round(cloud)}%`);
+      if (precipKind && precipKind !== 'none') {
+        const verb = precipKind.charAt(0).toUpperCase() + precipKind.slice(1);
+        condParts.push(Number.isFinite(precip) && precip > 0 ? `${verb} ${precip.toFixed(1)} mm/h` : verb);
+      }
+      const condValue = condParts.join(' · ') || undefined;
+
+      // Quick drone-ops verdict — mirrors backend doctrine thresholds.
+      let tactical: string | undefined;
+      let droneState: 'no-go' | 'marginal' | 'go' = 'go';
+      let droneReason = '';
+      if (Number.isFinite(windMs) && windMs >= 12) { droneState = 'no-go'; droneReason = `wind ${windMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(gustMs) && gustMs >= 15) { droneState = 'no-go'; droneReason = `gusts ${gustMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(visM) && visM < 1000) { droneState = 'no-go'; droneReason = `vis ${(visM / 1000).toFixed(1)} km`; }
+      else if (Number.isFinite(tempC) && tempC <= -15) { droneState = 'no-go'; droneReason = `temp ${tempC.toFixed(0)}°C`; }
+      else if (Number.isFinite(windMs) && windMs >= 8) { droneState = 'marginal'; droneReason = `wind ${windMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(gustMs) && gustMs >= 10) { droneState = 'marginal'; droneReason = `gusts ${gustMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(visM) && visM < 3000) { droneState = 'marginal'; droneReason = `vis ${(visM / 1000).toFixed(1)} km`; }
+      else if (Number.isFinite(tempC) && tempC <= 0) { droneState = 'marginal'; droneReason = `temp ${tempC.toFixed(0)}°C`; }
+      if (Number.isFinite(windMs) || Number.isFinite(visM) || Number.isFinite(tempC)) {
+        tactical = droneReason
+          ? `Drone: ${droneState.toUpperCase()} (${droneReason})`
+          : `Drone: ${droneState.toUpperCase()}`;
+      }
+
+      lyr.bindPopup(buildPopup({
+        header: 'Weather observation',
+        subheader: hhmm || undefined,
+        minWidth: 220,
+        facts: [
+          { label: 'Temperature', value: tempValue, hint: chillHint },
+          { label: 'Wind', value: windValue, hint: gustHint },
+          { label: 'Conditions', value: condValue },
+        ],
+        tactical,
+        details: {
+          facts: [
+            { label: 'Dewpoint', value: Number.isFinite(dewC) ? `${dewC.toFixed(1)}°C` : undefined },
+            { label: 'Humidity', value: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : undefined },
+            { label: 'Pressure', value: Number.isFinite(pressure) ? `${Math.round(pressure)} hPa` : undefined },
+            { label: 'Visibility', value: Number.isFinite(visM) ? `${(visM / 1000).toFixed(1)} km` : undefined },
+            { label: 'Wind gust', value: Number.isFinite(gustMs) ? `${gustMs.toFixed(1)} m/s` : undefined },
+            { label: 'Wind direction', value: Number.isFinite(windDeg) ? `${Math.round(windDeg)}°` : undefined },
+            { label: 'Precipitation', value: Number.isFinite(precip) ? `${precip.toFixed(2)} mm/h` : undefined },
+            { label: 'Snow depth', value: Number.isFinite(snow) ? `${Math.round(snow)} cm` : undefined },
+            { label: 'Time (UTC)', value: time || undefined },
+          ],
+        },
+      }));
+      return;
+    }
+
     if (layer === 'fmi_forecast') {
       const p = props as Record<string, unknown>;
-      lyr.bindPopup(`
-        <div style="font-size:11px;line-height:1.6;min-width:160px">
-          <div style="font-weight:700;margin-bottom:2px">Forecast — ${p.time ?? ''}</div>
-          ${p.temperature != null ? `<div><span style="color:#64748b">Temp</span>: <strong>${p.temperature}°C</strong></div>` : ''}
-          ${p.windspeedms != null ? `<div><span style="color:#64748b">Wind</span>: <strong>${p.windspeedms} m/s</strong></div>` : ''}
-          ${p.totalcloudcover != null ? `<div><span style="color:#64748b">Cloud</span>: <strong>${p.totalcloudcover}%</strong></div>` : ''}
-          ${p.precipitation1h != null ? `<div><span style="color:#64748b">Precip</span>: <strong>${p.precipitation1h} mm/h</strong></div>` : ''}
-        </div>
-      `);
+      const time = p.time ? String(p.time) : '';
+      const hhmm = time.length >= 16 ? `${time.slice(11, 16)} UTC` : '';
+
+      const tempC    = Number(p.temperature_c ?? NaN);
+      const windMs   = Number(p.wind_speed_ms ?? NaN);
+      const windDeg  = Number(p.wind_direction_deg ?? NaN);
+      const gustMs   = Number(p.wind_gust_ms ?? NaN);
+      const precip   = Number(p.precipitation_mmh ?? NaN);
+      const cloud    = Number(p.cloud_cover_pct ?? NaN);
+      const lowCloud = Number(p.low_cloud_pct ?? NaN);
+      const visM     = Number(p.visibility_m ?? NaN);
+      const ceilM    = Number(p.ceiling_m ?? NaN);
+      const humidity = Number(p.humidity_pct ?? NaN);
+
+      let leadHint: string | undefined;
+      if (time) {
+        const t = Date.parse(time);
+        if (Number.isFinite(t)) {
+          const hours = Math.round((t - Date.now()) / 3_600_000);
+          leadHint = hours === 0 ? 'now'
+            : hours > 0 ? `+${hours}h`
+            : `${hours}h`;
+        }
+      }
+
+      const cardinals = ['N','NE','E','SE','S','SW','W','NW'];
+      const windCard = Number.isFinite(windDeg)
+        ? cardinals[Math.round((((windDeg % 360) + 360) % 360) / 45) % 8]
+        : '';
+
+      const tempValue = Number.isFinite(tempC) ? `${tempC.toFixed(1)}°C` : undefined;
+
+      let windValue: string | undefined;
+      if (Number.isFinite(windMs)) {
+        const dir = windCard || (Number.isFinite(windDeg) ? `${Math.round(windDeg)}°` : '');
+        windValue = dir ? `${windMs.toFixed(1)} m/s ${dir}` : `${windMs.toFixed(1)} m/s`;
+      }
+      const gustHint = Number.isFinite(gustMs) ? `gust ${gustMs.toFixed(0)}` : undefined;
+
+      const condParts: string[] = [];
+      if (Number.isFinite(cloud)) condParts.push(`Cloud ${Math.round(cloud)}%`);
+      if (Number.isFinite(precip) && precip > 0) condParts.push(`Rain ${precip.toFixed(1)} mm/h`);
+      const condValue = condParts.join(' · ') || undefined;
+
+      let tactical: string | undefined;
+      const droneSummary = p.drone_summary ? String(p.drone_summary) : '';
+      const droneRating  = p.drone_rating  ? String(p.drone_rating)  : '';
+      if (droneSummary) {
+        tactical = droneSummary;
+      } else if (droneRating) {
+        tactical = `Drone: ${droneRating.toUpperCase()}`;
+      } else {
+        let droneState: 'no-go' | 'marginal' | 'go' = 'go';
+        let droneReason = '';
+        if (Number.isFinite(windMs) && windMs >= 12) { droneState = 'no-go'; droneReason = `wind ${windMs.toFixed(0)} m/s`; }
+        else if (Number.isFinite(gustMs) && gustMs >= 15) { droneState = 'no-go'; droneReason = `gusts ${gustMs.toFixed(0)} m/s`; }
+        else if (Number.isFinite(visM) && visM < 1000) { droneState = 'no-go'; droneReason = `vis ${(visM / 1000).toFixed(1)} km`; }
+        else if (Number.isFinite(tempC) && tempC <= -15) { droneState = 'no-go'; droneReason = `temp ${tempC.toFixed(0)}°C`; }
+        else if (Number.isFinite(windMs) && windMs >= 8) { droneState = 'marginal'; droneReason = `wind ${windMs.toFixed(0)} m/s`; }
+        else if (Number.isFinite(gustMs) && gustMs >= 10) { droneState = 'marginal'; droneReason = `gusts ${gustMs.toFixed(0)} m/s`; }
+        else if (Number.isFinite(visM) && visM < 3000) { droneState = 'marginal'; droneReason = `vis ${(visM / 1000).toFixed(1)} km`; }
+        else if (Number.isFinite(tempC) && tempC <= 0) { droneState = 'marginal'; droneReason = `temp ${tempC.toFixed(0)}°C`; }
+        if (Number.isFinite(windMs) || Number.isFinite(visM) || Number.isFinite(tempC)) {
+          tactical = droneReason
+            ? `Drone: ${droneState.toUpperCase()} (${droneReason})`
+            : `Drone: ${droneState.toUpperCase()}`;
+        }
+      }
+
+      const aviation = p.aviation_rating ? String(p.aviation_rating) : '';
+
+      // Permanent on-map label so the user can read conditions at a glance
+      // without clicking. Arrows point in the direction the wind is going.
+      const cardinalArrows = ['↓','↙','←','↖','↑','↗','→','↘'];
+      const windArrow = Number.isFinite(windDeg)
+        ? cardinalArrows[Math.round((((windDeg % 360) + 360) % 360) / 45) % 8]
+        : '';
+      const labelRows: string[] = [];
+      if (Number.isFinite(tempC)) labelRows.push(`${tempC.toFixed(0)}°C`);
+      if (Number.isFinite(windMs)) labelRows.push(`${windMs.toFixed(0)} m/s ${windArrow}`.trim());
+      if (Number.isFinite(precip) && precip >= 0.1) labelRows.push(`☂ ${precip.toFixed(1)}`);
+      else if (Number.isFinite(cloud)) labelRows.push(`☁ ${Math.round(cloud)}%`);
+      const labelHtml = labelRows.length
+        ? `<div class="fmi-forecast-label">${labelRows.map((r) => `<span>${r}</span>`).join('')}</div>`
+        : '';
+      if (labelHtml) {
+        lyr.bindTooltip(labelHtml, {
+          permanent: true,
+          direction: 'center',
+          className: 'fmi-forecast-tooltip',
+          opacity: 1,
+        });
+      }
+
+      lyr.bindPopup(buildPopup({
+        header: 'Forecast',
+        subheader: [hhmm, leadHint].filter(Boolean).join(' · ') || undefined,
+        minWidth: 220,
+        facts: [
+          { label: 'Temperature', value: tempValue },
+          { label: 'Wind', value: windValue, hint: gustHint },
+          { label: 'Conditions', value: condValue },
+        ],
+        tactical,
+        details: {
+          facts: [
+            { label: 'Wind direction', value: Number.isFinite(windDeg) ? `${Math.round(windDeg)}°` : undefined },
+            { label: 'Wind gust', value: Number.isFinite(gustMs) ? `${gustMs.toFixed(1)} m/s` : undefined },
+            { label: 'Low cloud', value: Number.isFinite(lowCloud) ? `${Math.round(lowCloud)}%` : undefined },
+            { label: 'Ceiling', value: Number.isFinite(ceilM) ? `${Math.round(ceilM)} m` : undefined },
+            { label: 'Visibility', value: Number.isFinite(visM) ? `${(visM / 1000).toFixed(1)} km` : undefined },
+            { label: 'Humidity', value: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : undefined },
+            { label: 'Precipitation', value: Number.isFinite(precip) ? `${precip.toFixed(2)} mm/h` : undefined },
+            { label: 'Aviation', value: aviation || undefined },
+            { label: 'Time (UTC)', value: time || undefined },
+          ],
+        },
+      }));
+      return;
+    }
+
+    if (layer === 'mml') {
+      const p = props as Record<string, unknown>;
+      const tt = String(p.terrain_type ?? '').toLowerCase();
+      const pass = String(p.passability ?? '').toLowerCase();
+
+      // Terrain type → emoji + display label.
+      const terrainMeta: Record<string, { emoji: string; label: string }> = {
+        swamp:   { emoji: '🟫', label: 'Swamp' },
+        lake:    { emoji: '🟦', label: 'Lake' },
+        river:   { emoji: '🟦', label: 'River' },
+        sea:     { emoji: '🌊', label: 'Sea' },
+        bedrock: { emoji: '⛰', label: 'Bedrock' },
+        sand:    { emoji: '🟨', label: 'Sand / gravel' },
+      };
+      const meta = terrainMeta[tt] ?? { emoji: '🟩', label: tt ? tt.charAt(0).toUpperCase() + tt.slice(1) : 'Terrain' };
+
+      // Passability colour for the header chip.
+      const passColor: Record<string, string> = {
+        impassable: '#dc2626',
+        obstacle:   '#f59e0b',
+        slow:       '#eab308',
+      };
+
+      // Tactical implication per terrain × passability.
+      const tacticalMap: Record<string, string> = {
+        swamp:   'Bog — impassable for vehicles, partial concealment',
+        lake:    'Water barrier — no crossing',
+        river:   'Water — crossing point required',
+        sea:     'Water barrier — no crossing',
+        bedrock: 'Elevated hard ground — limited cover, defensible',
+        sand:    'Soft going — reduced mobility, poor footing',
+      };
+      const tactical = tacticalMap[tt];
+
+      // alkupvm = survey/update date (ISO date string from MML).
+      const surveyed = p.alkupvm ? String(p.alkupvm) : undefined;
+
+      // sijaintitarkkuus = location accuracy in mm.
+      const accuracyMm = Number(p.sijaintitarkkuus ?? NaN);
+      const accuracyM = Number.isFinite(accuracyMm) ? accuracyMm / 1000 : NaN;
+
+      // keskikorkeus = mean elevation. Unit varies by feature class (m for
+      // terrain, cm for water surfaces) so we render it raw and label as such.
+      const meanHeightRaw = p.keskikorkeus;
+      const meanHeight = (meanHeightRaw !== null && meanHeightRaw !== undefined && meanHeightRaw !== '')
+        ? `${meanHeightRaw}`
+        : undefined;
+
+      lyr.bindPopup(buildPopup({
+        header: `${meta.emoji} ${meta.label}`,
+        headerChip: pass && passColor[pass]
+          ? { text: pass, color: passColor[pass] }
+          : undefined,
+        minWidth: 220,
+        facts: [
+          { label: 'Surveyed', value: surveyed },
+        ],
+        tactical,
+        details: {
+          facts: [
+            { label: 'Mean height', value: meanHeight, hint: 'MML raw value' },
+            { label: 'Location accuracy', value: Number.isFinite(accuracyM) ? `± ${accuracyM.toFixed(1)} m` : undefined },
+            { label: 'MML ID', value: p.mtk_id ? String(p.mtk_id) : undefined },
+            { label: 'Class code', value: p.kohdeluokka != null ? String(p.kohdeluokka) : undefined },
+          ],
+        },
+      }));
+      return;
+    }
+
+    if (layer === 'statfin') {
+      const p = props as Record<string, unknown>;
+      const nameFi = p.nimi ? String(p.nimi) : '';
+      const nameSv = p.namn ? String(p.namn) : '';
+      const header = nameFi || nameSv || `Postinumero ${p.kunta ?? ''}`;
+      const subParts: string[] = [];
+      if (nameFi && nameSv && nameFi !== nameSv) subParts.push(nameSv);
+      if (p.kunta_nimi) subParts.push(`${p.kunta_nimi} (${p.kunta ?? '—'})`);
+      else if (p.kunta) subParts.push(`Kunta ${p.kunta}`);
+      const areaM2 = Number(p.pinta_ala ?? 0);
+      if (areaM2 > 0) subParts.push(`${(areaM2 / 1_000_000).toFixed(1)} km²`);
+
+      const pop = Number(p.he_vakiy ?? NaN);
+      const men = Number(p.he_miehet ?? NaN);
+      const women = Number(p.he_naiset ?? NaN);
+      const meanAge = Number(p.he_kika ?? NaN);
+      const age0_14 = Number(p.he_0_14 ?? NaN);
+      const workingAge = Number(p.he_15_64 ?? NaN);
+      const age65 = Number(p.he_65_ ?? NaN);
+      const employed = Number(p.pt_tyolli ?? NaN);
+      const unemployed = Number(p.pt_tyott ?? NaN);
+      const labourForce = Number.isFinite(employed) && Number.isFinite(unemployed)
+        ? employed + unemployed
+        : NaN;
+      const income = Number(p.tr_ktu ?? NaN);
+      const dwellings = Number(p.ra_asunn ?? NaN);
+
+      // Qualitative tier only — the underlying numbers live behind "Show all".
+      let tactical: string | undefined;
+      if (Number.isFinite(pop)) {
+        const tier = pop < 500 ? 'hamlet' : pop < 5000 ? 'village' : pop < 50000 ? 'town' : 'urban';
+        tactical = `${tier} — civilian considerations & recruiting/billeting pool`;
+      }
+
+      const popVal = Number.isFinite(pop) ? fmtInt(pop) : undefined;
+      const fmt = (v: number) => (Number.isFinite(v) ? fmtInt(v) : undefined);
+      const fmtEuro = (v: number) => (Number.isFinite(v) ? `€${fmtInt(v)}` : undefined);
+
+      lyr.bindPopup(buildPopup({
+        header,
+        subheader: subParts.join(' · ') || undefined,
+        minWidth: 220,
+        facts: [
+          { label: 'Population', value: popVal },
+        ],
+        tactical,
+        details: {
+          facts: [
+            { label: 'Men', value: fmt(men),
+              hint: Number.isFinite(men) && Number.isFinite(pop) ? fmtPct(men, pop) : undefined },
+            { label: 'Women', value: fmt(women),
+              hint: Number.isFinite(women) && Number.isFinite(pop) ? fmtPct(women, pop) : undefined },
+            { label: 'Mean age', value: Number.isFinite(meanAge) ? `${meanAge.toFixed(0)}` : undefined },
+            { label: 'Ages 0-14', value: fmt(age0_14),
+              hint: Number.isFinite(age0_14) && Number.isFinite(pop) ? fmtPct(age0_14, pop) : undefined },
+            { label: 'Working age (15-64)', value: fmt(workingAge),
+              hint: Number.isFinite(workingAge) && Number.isFinite(pop) ? fmtPct(workingAge, pop) : undefined },
+            { label: 'Ages 65+', value: fmt(age65),
+              hint: Number.isFinite(age65) && Number.isFinite(pop) ? fmtPct(age65, pop) : undefined },
+            { label: 'Employed', value: fmt(employed) },
+            { label: 'Unemployed', value: fmt(unemployed),
+              hint: Number.isFinite(unemployed) && Number.isFinite(labourForce) && labourForce > 0
+                ? fmtPct(unemployed, labourForce) : undefined },
+            { label: 'Median income', value: fmtEuro(income) },
+            { label: 'Dwellings', value: fmt(dwellings) },
+          ],
+        },
+      }));
       return;
     }
 

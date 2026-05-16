@@ -16,16 +16,15 @@ export type SourceId =
 
 export type LayerKey = SourceId | 'mcoo';
 
+export type LayerStatus = 'ok' | 'unavailable' | 'error' | 'partial' | 'degraded' | 'unknown';
+
 export interface SourceInfo {
   id: SourceId;
-  name: string;
-  description?: string;
-  bbox_required?: boolean;
-  tags?: string[];
-  auth_required?: boolean;
+  label: string;
+  status: LayerStatus;
+  last_checked?: string | null;
+  reason?: string | null;
 }
-
-export type LayerStatus = 'ok' | 'unavailable' | 'error' | 'partial' | 'degraded';
 
 export interface LayerMeta {
   status: LayerStatus;

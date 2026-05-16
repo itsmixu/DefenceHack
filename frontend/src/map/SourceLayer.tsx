@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { GeoJSON } from 'react-leaflet';
 import { useQuery } from '@tanstack/react-query';
-import type { FeatureCollection } from 'geojson';
+import type { Feature, FeatureCollection } from 'geojson';
 import { getLayer } from '../api/client';
 import type { LayerKey } from '../api/types';
 import {
@@ -16,15 +16,8 @@ import {
   useTimelineStore,
 } from '../store';
 import { getStyleForLayer } from './layerStyles';
-
-// Only these layers genuinely return different data for different timestamps.
-// All other layers (mml, digiroad, opencellid, starlink, exposure, mcoo) are static
-// and must NOT be re-fetched when the timeline scrubber moves — doing so would
-// erase their cache and cause unnecessary network requests.
-// astronomy: computed locally by astral — any date, zero latency.
-// fmi_forecast: different forecast at different base times.
-// statfin: annual resolution — skip (same data all year, not useful to re-fetch hourly).
-const TIME_AWARE: Set<LayerKey> = new Set(['fmi', 'osm', 'astronomy', 'fmi_forecast']);
+import { isLayerSuppressedByZoom } from './layerLoadLimits';
+import { TIME_AWARE_LAYER_SET } from './timeAware';
 
 interface Props {
   layer: LayerKey;
@@ -42,6 +35,8 @@ const isBackendUnavailableError = (err: unknown): boolean => {
 
 export default function SourceLayer({ layer }: Props) {
   const bbox = useBboxStore((s) => s.bbox);
+  const zoom = useBboxStore((s) => s.zoom);
+  const suppressedByZoom = isLayerSuppressedByZoom(layer, zoom);
   const setStatus = useLayerStore((s) => s.setStatus);
   const setLoading = useLayerStore((s) => s.setLoading);
   const setBackendUnavailable = useBackendStatusStore((s) => s.setUnavailable);
@@ -50,13 +45,43 @@ export default function SourceLayer({ layer }: Props) {
   const cachedFeatures = useFeatureCacheStore((s) => s.features[layer]);
   const coveredList = useFeatureCacheStore((s) => s.covered[layer]);
   const osmEnabled = useOsmPoiFilterStore((s) => s.enabled);
-  const selectedMs = useTimelineStore((s) => s.selectedMs);
-  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
+  const clearLayerCache = useFeatureCacheStore((s) => s.clear);
+  const committedMs = useTimelineStore((s) => s.committedMs);
+  const selectedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
+  const isTimeAware = TIME_AWARE_LAYER_SET.has(layer);
+
+  // Forecast adaptive grid: at low zoom the bbox is huge, so 3×3 = 9 cells
+  // looks like one zone; bump to 7×7 / 5×5 so the viewport always carries
+  // enough zones to feel like a weather map. Backend clamps to odd 3..9.
+  const forecastGrid = useMemo<number | undefined>(() => {
+    if (layer !== 'fmi_forecast') return undefined;
+    if (zoom == null) return 5;
+    if (zoom <= 6) return 7;
+    if (zoom <= 9) return 5;
+    return 3;
+  }, [layer, zoom]);
+
+  // Time-aware layers return different data per `t`, but the spatial coverage
+  // cache (`covered`) is keyed only on bbox. Without this effect, after the
+  // first fetch `alreadyCovered` would short-circuit `needsFetch=false` and
+  // the slider would never trigger a re-fetch. Clear the layer's cache when
+  // the committed time changes so the next render re-fetches for the new `t`.
+  // Same applies to forecastGrid: a different grid produces different points,
+  // so the existing cache is stale and must be cleared.
+  useEffect(() => {
+    if (!isTimeAware) return;
+    clearLayerCache(layer);
+  }, [isTimeAware, committedMs, layer, clearLayerCache]);
+  useEffect(() => {
+    if (forecastGrid == null) return;
+    clearLayerCache(layer);
+  }, [forecastGrid, layer, clearLayerCache]);
 
   // Decide whether the current viewport is already covered by a previously
   // fetched bbox. If so, skip the network request and just render the cache.
   const { needsFetch, fetchBboxStr } = useMemo(() => {
     if (!bbox) return { needsFetch: false, fetchBboxStr: null as string | null };
+    if (suppressedByZoom) return { needsFetch: false, fetchBboxStr: null };
     const viewport = parseBbox(bbox);
     const covered = coveredList ?? [];
     const alreadyCovered = covered.some((b) => bboxContains(b, viewport));
@@ -64,23 +89,22 @@ export default function SourceLayer({ layer }: Props) {
     // Pre-fetch a slightly larger area so small pans stay in cache.
     const expanded = expandBbox(viewport, 0.5);
     return { needsFetch: true, fetchBboxStr: expanded.join(',') };
-  }, [bbox, coveredList]);
-
-  const isTimeAware = TIME_AWARE.has(layer);
+  }, [bbox, coveredList, suppressedByZoom]);
 
   const query = useQuery({
     // Non-time-aware layers omit selectedIso from the key so they don't
     // invalidate (and re-fetch) every time the timeline scrubber moves.
     queryKey: isTimeAware
-      ? ['layer', layer, fetchBboxStr, selectedIso]
+      ? ['layer', layer, fetchBboxStr, selectedIso, forecastGrid ?? 'na']
       : ['layer', layer, fetchBboxStr],
     enabled: needsFetch && !!fetchBboxStr,
     queryFn: () => {
       if (!fetchBboxStr) throw new Error('no bbox');
-      const params = isTimeAware
+      const params: Record<string, string | undefined> = isTimeAware
         ? { bbox: fetchBboxStr, t: selectedIso }
         : { bbox: fetchBboxStr };
-      return getLayer(layer, params);
+      if (forecastGrid != null) params.grid = String(forecastGrid);
+      return getLayer(layer, params as { bbox: string; t?: string });
     },
   });
 
@@ -124,24 +148,88 @@ export default function SourceLayer({ layer }: Props) {
     setBackendAvailable,
   ]);
 
-  const style = useMemo(() => getStyleForLayer(layer), [layer]);
+  const style = useMemo(() => getStyleForLayer(layer, zoom), [layer, zoom]);
 
   const collection = useMemo<FeatureCollection | null>(() => {
     if (!cachedFeatures || cachedFeatures.length === 0) return null;
-    if (layer !== 'osm') return { type: 'FeatureCollection', features: cachedFeatures };
 
-    const visible = cachedFeatures.filter((f) => {
-      const cat = String((f.properties as Record<string, unknown> | null)?.category ?? '');
-      return osmEnabled.includes(cat as (typeof osmEnabled)[number]);
-    });
-    return { type: 'FeatureCollection', features: visible };
-  }, [cachedFeatures, layer, osmEnabled]);
+    if (layer === 'osm') {
+      const visible = cachedFeatures.filter((f) => {
+        const cat = String((f.properties as Record<string, unknown> | null)?.category ?? '');
+        return osmEnabled.includes(cat as (typeof osmEnabled)[number]);
+      });
+      return { type: 'FeatureCollection', features: visible };
+    }
 
+    // fmi_forecast returns 9 grid points × 48 hourly timesteps stacked at the
+    // same coordinates. Without time filtering the map shows every timestep at
+    // once and the slider has no visible effect. Pick the timestep nearest to
+    // committedMs at each grid point so each slider move snaps to one frame.
+    if (layer === 'fmi_forecast') {
+      // Step 1: pick the timestep nearest committedMs at each grid cell so
+      // moving the slider snaps to one frame (forecast has 48 timesteps per
+      // cell stacked at identical lat/lon).
+      type GridKey = string;
+      const target = committedMs;
+      const best = new Map<GridKey, { delta: number; feature: Feature }>();
+      for (const f of cachedFeatures) {
+        const p = (f.properties ?? {}) as Record<string, unknown>;
+        const time = typeof p.time === 'string' ? Date.parse(p.time) : NaN;
+        if (!Number.isFinite(time)) continue;
+        const i = p.grid_i ?? 0;
+        const j = p.grid_j ?? 0;
+        const key: GridKey = `${i},${j}`;
+        const delta = Math.abs(time - target);
+        const cur = best.get(key);
+        if (!cur || delta < cur.delta) best.set(key, { delta, feature: f });
+      }
+      const picked = [...best.values()].map((v) => v.feature);
+
+      // Step 2: convert each Point into a Polygon rectangle covering that
+      // grid cell's slice of the bbox, so the map shows colored weather
+      // zones instead of clickable dots. Cell size derived from the spread
+      // of points themselves (works for any NxN grid).
+      const pts = picked
+        .map((f) => f.geometry)
+        .filter((g): g is GeoJSON.Point => g?.type === 'Point');
+      if (pts.length === 0) {
+        return { type: 'FeatureCollection', features: picked };
+      }
+      const lons = [...new Set(pts.map((g) => g.coordinates[0]))].sort((a, b) => a - b);
+      const lats = [...new Set(pts.map((g) => g.coordinates[1]))].sort((a, b) => a - b);
+      const dLon = lons.length > 1 ? (lons[lons.length - 1] - lons[0]) / (lons.length - 1) : 0.1;
+      const dLat = lats.length > 1 ? (lats[lats.length - 1] - lats[0]) / (lats.length - 1) : 0.1;
+      const hLon = dLon / 2;
+      const hLat = dLat / 2;
+
+      const polygons: Feature[] = picked.map((f) => {
+        const g = f.geometry as GeoJSON.Point;
+        const [lon, lat] = g.coordinates;
+        const ring: [number, number][] = [
+          [lon - hLon, lat - hLat],
+          [lon + hLon, lat - hLat],
+          [lon + hLon, lat + hLat],
+          [lon - hLon, lat + hLat],
+          [lon - hLon, lat - hLat],
+        ];
+        return {
+          type: 'Feature',
+          properties: { ...(f.properties ?? {}), _center: [lon, lat] },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        };
+      });
+      return { type: 'FeatureCollection', features: polygons };
+    }
+
+    return { type: 'FeatureCollection', features: cachedFeatures };
+  }, [cachedFeatures, layer, osmEnabled, committedMs]);
+
+  if (suppressedByZoom) return null;
   if (!collection || collection.features.length === 0) return null;
 
   return (
     <GeoJSON
-      key={`${layer}-${cachedFeatures?.length ?? 0}`}
+      key={`${layer}-${cachedFeatures?.length ?? 0}-${collection.features.length}-${isTimeAware ? committedMs : 'na'}-z${zoom ?? 'na'}`}
       data={collection}
       style={style.style}
       pointToLayer={style.pointToLayer}

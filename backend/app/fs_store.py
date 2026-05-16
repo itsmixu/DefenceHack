@@ -96,16 +96,35 @@ def _default_feature_styles() -> dict[str, Any]:
 
 def _load_index() -> dict[str, Any]:
     """Load the metadata index. Returns {folders: {}, files: {}} on any error."""
-    if INDEX_FILE.exists():
-        try:
-            return json.loads(INDEX_FILE.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {"folders": {}, "files": {}}
+    global _index_cache, _index_mtime
+    if not INDEX_FILE.exists():
+        if _index_cache is None:
+            _index_cache = {"folders": {}, "files": {}}
+            _index_mtime = 0.0
+        return _index_cache
+    try:
+        mtime = INDEX_FILE.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    if _index_cache is not None and mtime == _index_mtime:
+        return _index_cache
+    try:
+        _index_cache = json.loads(INDEX_FILE.read_text())
+        _index_mtime = mtime
+    except (json.JSONDecodeError, OSError):
+        _index_cache = {"folders": {}, "files": {}}
+        _index_mtime = 0.0
+    return _index_cache
 
 
 def _save_index(index: dict[str, Any]) -> None:
+    global _index_cache, _index_mtime
     INDEX_FILE.write_text(json.dumps(index, indent=2))
+    _index_cache = index
+    try:
+        _index_mtime = INDEX_FILE.stat().st_mtime
+    except OSError:
+        _index_mtime = 0.0
 
 
 # ── Folders ───────────────────────────────────────────────────────────────────

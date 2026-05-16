@@ -22,6 +22,7 @@ import httpx
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -176,14 +177,14 @@ class OSMProvider(Provider):
 
         query = _build_query(bbox, t)
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    OVERPASS_URL,
-                    data={"data": query},
-                    headers={"User-Agent": "DefenceHack-IPB/0.1"},
-                )
-                resp.raise_for_status()
-                payload = resp.json()
+            client = get_client()
+            resp = await client.post(
+                OVERPASS_URL,
+                data={"data": query},
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
         except httpx.HTTPError as e:
             self.mark("unavailable", f"overpass error: {e}")
             return empty_collection(

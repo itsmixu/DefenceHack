@@ -33,8 +33,8 @@ export default function ZoneControls() {
   const setPrefetch = useZonesStore((s) => s.setPrefetch);
   const setBackendUnavailable = useBackendStatusStore((s) => s.setUnavailable);
   const setBackendAvailable = useBackendStatusStore((s) => s.setAvailable);
-  const selectedMs = useTimelineStore((s) => s.selectedMs);
-  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
+  const committedMs = useTimelineStore((s) => s.committedMs);
+  const selectedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
   const push = useToastStore((s) => s.push);
   const qc = useQueryClient();
 

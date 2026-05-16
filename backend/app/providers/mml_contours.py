@@ -31,6 +31,7 @@ import httpx
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -95,41 +96,40 @@ class MMLContoursProvider(Provider):
         features: list[dict] = []
         capped = False
         try:
-            async with httpx.AsyncClient(timeout=60.0,
-                                         headers={"User-Agent": "DefenceHack-IPB/0.1"}) as c:
-                next_url: str | None = first_url
-                next_params: dict[str, str] | None = first_params
-                while next_url is not None:
-                    resp = await c.get(next_url, params=next_params)
-                    resp.raise_for_status()
-                    payload = resp.json()
-                    for raw in payload.get("features", []):
-                        geom = raw.get("geometry")
-                        if geom is None:
-                            continue
-                        props = raw.get("properties") or {}
-                        elev_m = _elevation_m(props)
-                        features.append({
-                            "type": "Feature",
-                            "id": raw.get("id"),
-                            "geometry": geom,  # already EPSG:4326
-                            "properties": {
-                                "source": self.id,
-                                "elevation_m": elev_m,
-                                "contour_type": _contour_type(elev_m),
-                            },
-                        })
-                    if len(features) >= HARD_CAP:
-                        capped = True
-                        break
-                    # Follow OGC API Features pagination via rel="next" link.
-                    nxt = next(
-                        (lnk.get("href") for lnk in payload.get("links", [])
-                         if lnk.get("rel") == "next" and lnk.get("href")),
-                        None,
-                    )
-                    next_url = nxt
-                    next_params = None  # next href already carries query params
+            c = get_client()
+            next_url: str | None = first_url
+            next_params: dict[str, str] | None = first_params
+            while next_url is not None:
+                resp = await c.get(next_url, params=next_params, timeout=60.0)
+                resp.raise_for_status()
+                payload = resp.json()
+                for raw in payload.get("features", []):
+                    geom = raw.get("geometry")
+                    if geom is None:
+                        continue
+                    props = raw.get("properties") or {}
+                    elev_m = _elevation_m(props)
+                    features.append({
+                        "type": "Feature",
+                        "id": raw.get("id"),
+                        "geometry": geom,  # already EPSG:4326
+                        "properties": {
+                            "source": self.id,
+                            "elevation_m": elev_m,
+                            "contour_type": _contour_type(elev_m),
+                        },
+                    })
+                if len(features) >= HARD_CAP:
+                    capped = True
+                    break
+                # Follow OGC API Features pagination via rel="next" link.
+                nxt = next(
+                    (lnk.get("href") for lnk in payload.get("links", [])
+                     if lnk.get("rel") == "next" and lnk.get("href")),
+                    None,
+                )
+                next_url = nxt
+                next_params = None  # next href already carries query params
         except httpx.HTTPError as e:
             self.mark("unavailable", f"MML contours API error: {e}")
             return empty_collection(self.id, status="unavailable",

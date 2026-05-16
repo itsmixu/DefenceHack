@@ -18,6 +18,7 @@ import httpx
 from .. import cache
 from ..bbox import BBox
 from ..geo import reproject_bbox, reproject_geometry
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -108,13 +109,10 @@ class DigiroadProvider(Provider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.get(
-                    self.wfs_url, params=params,
-                    headers={"User-Agent": "DefenceHack-IPB/0.1"},
-                )
-                resp.raise_for_status()
-                payload = resp.json()
+            client = get_client()
+            resp = await client.get(self.wfs_url, params=params, timeout=60.0)
+            resp.raise_for_status()
+            payload = resp.json()
         except httpx.HTTPError as e:
             self.mark("unavailable", f"Digiroad WFS error: {e}")
             return empty_collection(

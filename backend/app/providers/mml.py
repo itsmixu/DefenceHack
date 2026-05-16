@@ -20,6 +20,7 @@ import httpx
 
 from .. import cache
 from ..bbox import BBox
+from ..http_client import get_client
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
@@ -144,12 +145,12 @@ class MMLProvider(Provider):
                 ),
             )
 
-        async with httpx.AsyncClient(headers={"User-Agent": "DefenceHack-IPB/0.1"}) as client:
-            tasks = [
-                _fetch_terrain_type(client, api_key, terrain_type, collection, bbox)
-                for terrain_type, collection in DEFAULT_TERRAIN_TYPES.items()
-            ]
-            results = await asyncio.gather(*tasks)
+        client = get_client()
+        tasks = [
+            _fetch_terrain_type(client, api_key, terrain_type, collection, bbox)
+            for terrain_type, collection in DEFAULT_TERRAIN_TYPES.items()
+        ]
+        results = await asyncio.gather(*tasks)
 
         features = [f for group in results for f in group]
         cache.write(self.id, cache_key, {"features": features})

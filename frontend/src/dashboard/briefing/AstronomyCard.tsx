@@ -32,8 +32,8 @@ const dateLabel = (iso: string) => {
 
 export default function AstronomyCard() {
   const bbox = useBboxStore((s) => s.bbox);
-  const selectedMs = useTimelineStore((s) => s.selectedMs);
-  const t = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
+  const committedMs = useTimelineStore((s) => s.committedMs);
+  const t = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
 
   const { data, isLoading, error } = useQuery({
     enabled: !!bbox,

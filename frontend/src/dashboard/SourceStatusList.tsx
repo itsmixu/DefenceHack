@@ -4,14 +4,15 @@ import { useLayerStore } from '../store';
 import type { LayerKey, LayerStatus } from '../api/types';
 
 const dotForStatus = (s?: LayerStatus) => {
-  if (!s) return 'bg-white/35';
+  if (!s || s === 'unknown') return 'bg-white/35';
   if (s === 'ok') return 'bg-emerald-300';
-  if (s === 'unavailable') return 'bg-amber-300';
+  if (s === 'unavailable' || s === 'partial' || s === 'degraded') return 'bg-amber-300';
   return 'bg-red-300';
 };
 
 const labelForStatus = (s?: LayerStatus) => {
   if (!s) return 'not loaded';
+  if (s === 'unknown') return 'idle';
   return s;
 };
 
@@ -50,19 +51,19 @@ export default function SourceStatusList() {
               key={s.id}
               className="rounded border border-white/10 bg-black/30 p-2 text-xs"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">{s.name}</span>
-                <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
-                  <span className={`h-2 w-2 rounded-full ${dotForStatus(st)}`} />
-                  {labelForStatus(st)}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">{s.label}</span>
+                <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
+                  <span className={`h-2 w-2 rounded-full ${dotForStatus(st ?? s.status)}`} />
+                  {labelForStatus(st ?? s.status)}
                 </span>
               </div>
-              {s.description && (
-                <p className="mt-1 text-white/70">{s.description}</p>
+              {s.reason && (
+                <p className="mt-1 text-[10px] leading-snug text-white/65">{s.reason}</p>
               )}
               <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white/45">
                 id: {s.id}
-                {s.auth_required ? ' · auth required' : ''}
+                {s.last_checked ? ` · checked ${s.last_checked.slice(11, 16)}Z` : ''}
               </p>
             </li>
           );

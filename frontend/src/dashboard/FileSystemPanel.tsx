@@ -585,10 +585,10 @@ export default function FileSystemPanel() {
   const setActiveLayers = useLayerStore((s) => s.setActiveLayers);
   const featureCache    = useFeatureCacheStore((s) => s.features);
   const injectSnapshots = useFeatureCacheStore((s) => s.injectSnapshots);
-  const clearAllCache   = useFeatureCacheStore((s) => s.clearAll);
-  const selectedMs      = useTimelineStore((s) => s.selectedMs);
-  const setSelectedMs   = useTimelineStore((s) => s.setSelectedMs);
-  const map             = useMapStore((s) => s.map);
+  const clearAllCache    = useFeatureCacheStore((s) => s.clearAll);
+  const selectedMs       = useTimelineStore((s) => s.selectedMs);
+  const commitSelectedMs = useTimelineStore((s) => s.commitSelectedMs);
+  const map              = useMapStore((s) => s.map);
 
   const [activeFile, setActiveFile]           = useState<ActiveFile | null>(null);
   const [showSaveDialog, setShowSaveDialog]   = useState(false);
@@ -667,7 +667,7 @@ export default function FileSystemPanel() {
     }
     setActiveLayers((ph.active_layers ?? []) as LayerKey[]);
     setAllDrawn((ph.drawn_features?.features ?? []) as DrawnFeature[]);
-    if (ph.timeline_selected_ms != null) setSelectedMs(ph.timeline_selected_ms);
+    if (ph.timeline_selected_ms != null) commitSelectedMs(ph.timeline_selected_ms);
     if (map) {
       if (ph.bbox) {
         const [w, s, e, n] = ph.bbox;
@@ -676,7 +676,7 @@ export default function FileSystemPanel() {
         map.flyTo([ph.center[0], ph.center[1]], ph.zoom, { animate: true, duration: 0.6 });
       }
     }
-  }, [clearAllCache, injectSnapshots, setActiveLayers, setAllDrawn, setSelectedMs, map]);
+  }, [clearAllCache, injectSnapshots, setActiveLayers, setAllDrawn, commitSelectedMs, map]);
 
   // ── Open file ────────────────────────────────────────────────────────────────
 
