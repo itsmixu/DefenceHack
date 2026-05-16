@@ -231,7 +231,7 @@ export default function MapView() {
           })}
       </div>
 
-      <div className="pointer-events-auto absolute bottom-3 left-1/2 z-[1000] w-[min(760px,calc(100%-2rem))] -translate-x-1/2 rounded border border-white/15 bg-black/90 px-4 py-3 text-white shadow-[0_10px_28px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+      <div className="pointer-events-auto absolute top-3 left-1/2 z-[1000] w-[min(760px,calc(100%-2rem))] -translate-x-1/2 rounded border border-white/15 bg-black/90 px-4 py-3 text-white shadow-[0_10px_28px_rgba(0,0,0,0.5)] backdrop-blur-sm">
         <div className="mb-2 flex items-center justify-between gap-3">
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/65">Timeline</span>
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-white/80">

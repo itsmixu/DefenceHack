@@ -15,9 +15,12 @@ const LAYERS: LayerEntry[] = [
   { id: 'mml', label: 'MML terrain', hint: 'land cover polygons' },
   { id: 'mml_contours', label: 'MML contours', hint: 'elevation lines' },
   { id: 'statfin', label: 'Population', hint: 'Paavo choropleth' },
-  { id: 'fmi', label: 'Weather', hint: 'FMI stations' },
+  { id: 'fmi', label: 'Weather', hint: 'FMI stations (observations)' },
+  { id: 'fmi_forecast', label: 'Forecast', hint: 'FMI HARMONIE 48 h NWP' },
+  { id: 'syke', label: 'SYKE', hint: 'flood zones & Natura 2000' },
   { id: 'opencellid', label: 'Cell towers', hint: 'OpenCelliD' },
   { id: 'n2yo', label: 'Satellites', hint: 'overpass schedule' },
+  { id: 'astronomy', label: 'Astronomy', hint: 'sun / moon / twilight' },
   { id: 'exposure', label: 'Exposure', hint: 'danger zones' },
   { id: 'mcoo', label: 'MCOO', hint: 'go / slow-go / no-go' },
 ];
