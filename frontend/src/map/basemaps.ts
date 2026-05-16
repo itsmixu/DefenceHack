@@ -4,6 +4,7 @@ export interface Basemap {
   url: string;
   attribution: string;
   maxZoom?: number;
+  timeAware?: boolean;
 }
 
 // MML tiles are proxied through our backend (`/api/tiles/mml/...`) so the
@@ -31,5 +32,21 @@ export const basemaps: Basemap[] = [
     url: mmlUrl('taustakartta'),
     attribution: '&copy; Maanmittauslaitos',
     maxZoom: 18,
+  },
+  {
+    id: 'fmi-precipitation',
+    label: 'FMI Precipitation (radar)',
+    url: '/api/tiles/weather/precipitation/{z}/{y}/{x}.png',
+    attribution: '&copy; Ilmatieteen laitos (FMI)',
+    maxZoom: 14,
+    timeAware: true,
+  },
+  {
+    id: 'fmi-clouds',
+    label: 'FMI Cloud cover',
+    url: '/api/tiles/weather/clouds/{z}/{y}/{x}.png',
+    attribution: '&copy; Ilmatieteen laitos (FMI)',
+    maxZoom: 14,
+    timeAware: true,
   },
 ];

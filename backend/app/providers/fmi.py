@@ -47,7 +47,6 @@ DEFAULT_PARAMETERS: tuple[str, ...] = (
     "humidity",
     "pressure",
     "precipitation1h",
-    "precipitationamount",
     "visibility",
     "totalcloudcover",
     "snowdepth",

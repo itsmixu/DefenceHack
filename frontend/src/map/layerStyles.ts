@@ -2,6 +2,7 @@ import L from 'leaflet';
 import type { GeoJSONOptions, PathOptions, StyleFunction } from 'leaflet';
 import type { LayerKey } from '../api/types';
 import { getOsmPoiMeta } from './osmPoi';
+import { buildPopup, fmtInt, fmtPct } from './popupHelpers';
 
 const baseColorByLayer: Record<LayerKey, string> = {
   osm: '#ef4444',
@@ -106,9 +107,13 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         break;
       }
       case 'statfin': {
-        const pop = Number(p.population ?? 0);
-        const area = Number(p.area_km2 ?? 1);
-        const density = pop / Math.max(area, 0.0001);
+        // Paavo polygons — colour by population density (people / km²).
+        // Backend emits raw Finnish field names: he_vakiy = total population,
+        // pinta_ala = area in m².
+        const pop = Number(p.he_vakiy ?? 0);
+        const areaM2 = Number(p.pinta_ala ?? 0);
+        const areaKm2 = areaM2 > 0 ? areaM2 / 1_000_000 : 1;
+        const density = pop / Math.max(areaKm2, 0.0001);
         const t = Math.min(density / 500, 1);
         const r = Math.round(168 + (88 - 168) * t);
         const g = Math.round(85 + (28 - 85) * t);
@@ -325,6 +330,102 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       return;
     }
 
+    if (layer === 'fmi') {
+      const p = props as Record<string, unknown>;
+      const time = p.time ? String(p.time) : '';
+      // Show HH:MM UTC from the ISO timestamp.
+      const hhmm = time.length >= 16 ? `${time.slice(11, 16)} UTC` : '';
+
+      const tempC      = Number(p.temperature_c ?? NaN);
+      const dewC       = Number(p.dewpoint_c ?? NaN);
+      const chillC     = Number(p.wind_chill_c ?? NaN);
+      const humidity   = Number(p.humidity_pct ?? NaN);
+      const pressure   = Number(p.pressure_hpa ?? NaN);
+      const windMs     = Number(p.wind_speed_ms ?? NaN);
+      const windCard   = p.wind_direction_card ? String(p.wind_direction_card) : '';
+      const windDeg    = Number(p.wind_direction_deg ?? NaN);
+      const gustMs     = Number(p.wind_gust_ms ?? NaN);
+      const precip     = Number(p.precipitation_mmh ?? NaN);
+      const precipKind = p.precip_intensity ? String(p.precip_intensity) : '';
+      const visM       = Number(p.visibility_m ?? NaN);
+      const cloud      = Number(p.cloud_cover_pct ?? NaN);
+      const snow       = Number(p.snow_depth_cm ?? NaN);
+
+      // Headline temperature with wind-chill suffix when it actually differs.
+      let tempValue: string | undefined;
+      if (Number.isFinite(tempC)) {
+        const main = `${tempC.toFixed(1)}°C`;
+        const chillDiffers = Number.isFinite(chillC) && Math.abs(chillC - tempC) >= 1;
+        tempValue = chillDiffers
+          ? `${main}`
+          : main;
+      }
+      const chillHint = Number.isFinite(chillC) && Number.isFinite(tempC) && Math.abs(chillC - tempC) >= 1
+        ? `feels ${chillC.toFixed(0)}°C`
+        : undefined;
+
+      // Wind: "6 m/s NE (gust 9)"
+      let windValue: string | undefined;
+      if (Number.isFinite(windMs)) {
+        const dir = windCard || (Number.isFinite(windDeg) ? `${Math.round(windDeg)}°` : '');
+        windValue = dir ? `${windMs.toFixed(1)} m/s ${dir}` : `${windMs.toFixed(1)} m/s`;
+      }
+      const gustHint = Number.isFinite(gustMs) ? `gust ${gustMs.toFixed(0)}` : undefined;
+
+      // Conditions: "Cloud 40% · Light rain"
+      const condParts: string[] = [];
+      if (Number.isFinite(cloud)) condParts.push(`Cloud ${Math.round(cloud)}%`);
+      if (precipKind && precipKind !== 'none') {
+        const verb = precipKind.charAt(0).toUpperCase() + precipKind.slice(1);
+        condParts.push(Number.isFinite(precip) && precip > 0 ? `${verb} ${precip.toFixed(1)} mm/h` : verb);
+      }
+      const condValue = condParts.join(' · ') || undefined;
+
+      // Quick drone-ops verdict — mirrors backend doctrine thresholds.
+      let tactical: string | undefined;
+      let droneState: 'no-go' | 'marginal' | 'go' = 'go';
+      let droneReason = '';
+      if (Number.isFinite(windMs) && windMs >= 12) { droneState = 'no-go'; droneReason = `wind ${windMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(gustMs) && gustMs >= 15) { droneState = 'no-go'; droneReason = `gusts ${gustMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(visM) && visM < 1000) { droneState = 'no-go'; droneReason = `vis ${(visM / 1000).toFixed(1)} km`; }
+      else if (Number.isFinite(tempC) && tempC <= -15) { droneState = 'no-go'; droneReason = `temp ${tempC.toFixed(0)}°C`; }
+      else if (Number.isFinite(windMs) && windMs >= 8) { droneState = 'marginal'; droneReason = `wind ${windMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(gustMs) && gustMs >= 10) { droneState = 'marginal'; droneReason = `gusts ${gustMs.toFixed(0)} m/s`; }
+      else if (Number.isFinite(visM) && visM < 3000) { droneState = 'marginal'; droneReason = `vis ${(visM / 1000).toFixed(1)} km`; }
+      else if (Number.isFinite(tempC) && tempC <= 0) { droneState = 'marginal'; droneReason = `temp ${tempC.toFixed(0)}°C`; }
+      if (Number.isFinite(windMs) || Number.isFinite(visM) || Number.isFinite(tempC)) {
+        tactical = droneReason
+          ? `Drone: ${droneState.toUpperCase()} (${droneReason})`
+          : `Drone: ${droneState.toUpperCase()}`;
+      }
+
+      lyr.bindPopup(buildPopup({
+        header: 'Weather observation',
+        subheader: hhmm || undefined,
+        minWidth: 220,
+        facts: [
+          { label: 'Temperature', value: tempValue, hint: chillHint },
+          { label: 'Wind', value: windValue, hint: gustHint },
+          { label: 'Conditions', value: condValue },
+        ],
+        tactical,
+        details: {
+          facts: [
+            { label: 'Dewpoint', value: Number.isFinite(dewC) ? `${dewC.toFixed(1)}°C` : undefined },
+            { label: 'Humidity', value: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : undefined },
+            { label: 'Pressure', value: Number.isFinite(pressure) ? `${Math.round(pressure)} hPa` : undefined },
+            { label: 'Visibility', value: Number.isFinite(visM) ? `${(visM / 1000).toFixed(1)} km` : undefined },
+            { label: 'Wind gust', value: Number.isFinite(gustMs) ? `${gustMs.toFixed(1)} m/s` : undefined },
+            { label: 'Wind direction', value: Number.isFinite(windDeg) ? `${Math.round(windDeg)}°` : undefined },
+            { label: 'Precipitation', value: Number.isFinite(precip) ? `${precip.toFixed(2)} mm/h` : undefined },
+            { label: 'Snow depth', value: Number.isFinite(snow) ? `${Math.round(snow)} cm` : undefined },
+            { label: 'Time (UTC)', value: time || undefined },
+          ],
+        },
+      }));
+      return;
+    }
+
     if (layer === 'fmi_forecast') {
       const p = props as Record<string, unknown>;
       lyr.bindPopup(`
@@ -336,6 +437,77 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
           ${p.precipitation1h != null ? `<div><span style="color:#64748b">Precip</span>: <strong>${p.precipitation1h} mm/h</strong></div>` : ''}
         </div>
       `);
+      return;
+    }
+
+    if (layer === 'statfin') {
+      const p = props as Record<string, unknown>;
+      const nameFi = p.nimi ? String(p.nimi) : '';
+      const nameSv = p.namn ? String(p.namn) : '';
+      const header = nameFi || nameSv || `Postinumero ${p.kunta ?? ''}`;
+      const subParts: string[] = [];
+      if (nameFi && nameSv && nameFi !== nameSv) subParts.push(nameSv);
+      if (p.kunta_nimi) subParts.push(`${p.kunta_nimi} (${p.kunta ?? '—'})`);
+      else if (p.kunta) subParts.push(`Kunta ${p.kunta}`);
+      const areaM2 = Number(p.pinta_ala ?? 0);
+      if (areaM2 > 0) subParts.push(`${(areaM2 / 1_000_000).toFixed(1)} km²`);
+
+      const pop = Number(p.he_vakiy ?? NaN);
+      const men = Number(p.he_miehet ?? NaN);
+      const women = Number(p.he_naiset ?? NaN);
+      const meanAge = Number(p.he_kika ?? NaN);
+      const age0_14 = Number(p.he_0_14 ?? NaN);
+      const workingAge = Number(p.he_15_64 ?? NaN);
+      const age65 = Number(p.he_65_ ?? NaN);
+      const employed = Number(p.pt_tyolli ?? NaN);
+      const unemployed = Number(p.pt_tyott ?? NaN);
+      const labourForce = Number.isFinite(employed) && Number.isFinite(unemployed)
+        ? employed + unemployed
+        : NaN;
+      const income = Number(p.tr_ktu ?? NaN);
+      const dwellings = Number(p.ra_asunn ?? NaN);
+
+      // Qualitative tier only — the underlying numbers live behind "Show all".
+      let tactical: string | undefined;
+      if (Number.isFinite(pop)) {
+        const tier = pop < 500 ? 'hamlet' : pop < 5000 ? 'village' : pop < 50000 ? 'town' : 'urban';
+        tactical = `${tier} — civilian considerations & recruiting/billeting pool`;
+      }
+
+      const popVal = Number.isFinite(pop) ? fmtInt(pop) : undefined;
+      const fmt = (v: number) => (Number.isFinite(v) ? fmtInt(v) : undefined);
+      const fmtEuro = (v: number) => (Number.isFinite(v) ? `€${fmtInt(v)}` : undefined);
+
+      lyr.bindPopup(buildPopup({
+        header,
+        subheader: subParts.join(' · ') || undefined,
+        minWidth: 220,
+        facts: [
+          { label: 'Population', value: popVal },
+        ],
+        tactical,
+        details: {
+          facts: [
+            { label: 'Men', value: fmt(men),
+              hint: Number.isFinite(men) && Number.isFinite(pop) ? fmtPct(men, pop) : undefined },
+            { label: 'Women', value: fmt(women),
+              hint: Number.isFinite(women) && Number.isFinite(pop) ? fmtPct(women, pop) : undefined },
+            { label: 'Mean age', value: Number.isFinite(meanAge) ? `${meanAge.toFixed(0)}` : undefined },
+            { label: 'Ages 0-14', value: fmt(age0_14),
+              hint: Number.isFinite(age0_14) && Number.isFinite(pop) ? fmtPct(age0_14, pop) : undefined },
+            { label: 'Working age (15-64)', value: fmt(workingAge),
+              hint: Number.isFinite(workingAge) && Number.isFinite(pop) ? fmtPct(workingAge, pop) : undefined },
+            { label: 'Ages 65+', value: fmt(age65),
+              hint: Number.isFinite(age65) && Number.isFinite(pop) ? fmtPct(age65, pop) : undefined },
+            { label: 'Employed', value: fmt(employed) },
+            { label: 'Unemployed', value: fmt(unemployed),
+              hint: Number.isFinite(unemployed) && Number.isFinite(labourForce) && labourForce > 0
+                ? fmtPct(unemployed, labourForce) : undefined },
+            { label: 'Median income', value: fmtEuro(income) },
+            { label: 'Dwellings', value: fmt(dwellings) },
+          ],
+        },
+      }));
       return;
     }
 

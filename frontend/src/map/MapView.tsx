@@ -142,20 +142,26 @@ export default function MapView() {
   return (
     <div className="relative h-full w-full">
       <MapContainer center={[64, 25]} zoom={5} className="h-full w-full">
-        {activeBasemapList.map((b) => (
-          <TileLayer
-            key={b.id}
-            url={b.url}
-            attribution={b.attribution}
-            maxZoom={b.maxZoom}
-            opacity={basemapOpacity[b.id] ?? 1}
-            eventHandlers={{
-              loading: () => setBasemapLayerLoading(b.id, true),
-              load: () => setBasemapLayerLoading(b.id, false),
-              tileerror: () => setBasemapLayerLoading(b.id, false),
-            }}
-          />
-        ))}
+        {activeBasemapList.map((b) => {
+          const url = b.timeAware
+            ? `${b.url}?t=${encodeURIComponent(selectedIso)}`
+            : b.url;
+          const key = b.timeAware ? `${b.id}:${selectedIso}` : b.id;
+          return (
+            <TileLayer
+              key={key}
+              url={url}
+              attribution={b.attribution}
+              maxZoom={b.maxZoom}
+              opacity={basemapOpacity[b.id] ?? 1}
+              eventHandlers={{
+                loading: () => setBasemapLayerLoading(b.id, true),
+                load: () => setBasemapLayerLoading(b.id, false),
+                tileerror: () => setBasemapLayerLoading(b.id, false),
+              }}
+            />
+          );
+        })}
         <MapHandle />
         <BboxTracker />
         <DrawControl />
