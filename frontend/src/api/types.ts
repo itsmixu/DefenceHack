@@ -207,6 +207,29 @@ export interface Plan extends PlanSummary {
 }
 
 export interface PlanVersionSummary {
+// ── Plans & versions ──────────────────────────────────────────────────────────
+//
+// A Plan is a named save of the current map state. Multiple version snapshots
+// can be attached to each plan so trainees can scrub through how the plan
+// evolved from initial draft to final approved order.
+
+export interface Plan {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  bbox: [number, number, number, number] | null;
+  drawn_features: FeatureCollection;
+  active_layers: string[];
+  notes: string;
+  role?: string;
+}
+
+/** Summary returned by GET /api/plans (no drawn_features to keep payload small). */
+export type PlanSummary = Omit<Plan, 'drawn_features'>;
+
+export interface PlanVersion {
+  plan_id: string;
   version: number;
   label: string;
   role?: string;
@@ -243,4 +266,32 @@ export interface Operation {
   tags?: string[];
   created_at?: string;
   updated_at?: string;
+  bbox: [number, number, number, number] | null;
+  drawn_features: FeatureCollection;
+  active_layers: string[];
+  notes: string;
+  /** Snapshot of live data captured at save time (fmi, astronomy, etc.). */
+  conditions_snapshot?: Record<string, unknown>;
+}
+
+/** Summary returned by GET /api/plans/{id}/versions (no drawn_features). */
+export type PlanVersionSummary = Omit<PlanVersion, 'drawn_features'>;
+
+export interface CreatePlanBody {
+  name: string;
+  bbox?: [number, number, number, number];
+  drawn_features?: FeatureCollection;
+  active_layers?: string[];
+  notes?: string;
+  role?: string;
+}
+
+export interface CreateVersionBody {
+  label: string;
+  role?: string;
+  bbox?: [number, number, number, number];
+  drawn_features?: FeatureCollection;
+  active_layers?: string[];
+  notes?: string;
+  conditions_snapshot?: Record<string, unknown>;
 }

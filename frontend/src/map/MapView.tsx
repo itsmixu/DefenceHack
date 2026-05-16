@@ -67,15 +67,34 @@ export default function MapView() {
   const selectedMs = useTimelineStore((s) => s.selectedMs);
   const setSelectedMs = useTimelineStore((s) => s.setSelectedMs);
   const queryClient = useQueryClient();
+  const [timelineStartMs, setTimelineStartMs] = useState(rangeStartMs);
 
   const stepMs = stepMinutes * 60 * 1000;
-  const sliderSteps = Math.max(1, Math.round((rangeEndMs - rangeStartMs) / stepMs));
-  const sliderValue = Math.min(sliderSteps, Math.max(0, Math.round((selectedMs - rangeStartMs) / stepMs)));
+  const timelineSpanMs = rangeEndMs - rangeStartMs;
+  const maxStartMs = Math.max(rangeStartMs, rangeEndMs - stepMs);
+  const visibleStartMs = Math.min(maxStartMs, Math.max(rangeStartMs, timelineStartMs));
+  const visibleEndMs = Math.min(rangeEndMs, visibleStartMs + timelineSpanMs);
+  const sliderSteps = Math.max(1, Math.round((visibleEndMs - visibleStartMs) / stepMs));
+  const sliderValue = Math.min(sliderSteps, Math.max(0, Math.round((selectedMs - visibleStartMs) / stepMs)));
   const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
   const selectedLocal = useMemo(
     () => new Date(selectedMs).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
     [selectedMs],
   );
+  const timelineStartInput = useMemo(() => toDatetimeLocalValue(visibleStartMs), [visibleStartMs]);
+  const selectedInput = useMemo(() => toDatetimeLocalValue(selectedMs), [selectedMs]);
+  const sectionTimes = useMemo(() => {
+    const sections = 6;
+    return Array.from({ length: sections + 1 }, (_, i) => {
+      const ratio = i / sections;
+      const ms = Math.round(visibleStartMs + (visibleEndMs - visibleStartMs) * ratio);
+      return Math.round(ms / stepMs) * stepMs;
+    });
+  }, [visibleStartMs, visibleEndMs, stepMs]);
+
+  useEffect(() => {
+    setTimelineStartMs(rangeStartMs);
+  }, [rangeStartMs]);
 
   useEffect(() => {
     clearAllFeatures();
@@ -148,7 +167,7 @@ export default function MapView() {
       <ZoneControls />
 
       {(loadingBasemapLabels.length > 0 || loadingLayers.length > 0) && (
-        <div className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 rounded border border-white/15 bg-black/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-1/2 top-24 z-[1000] -translate-x-1/2 rounded border border-white/15 bg-black/70 px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-sm">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             {loadingBasemapLabels.length > 0 && (
@@ -168,13 +187,13 @@ export default function MapView() {
       )}
 
       {backendUnavailable && (
-        <div className="pointer-events-none absolute left-1/2 top-14 z-[1000] -translate-x-1/2 rounded border border-red-300/40 bg-black/85 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-200 shadow-[0_10px_26px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-1/2 top-36 z-[1000] -translate-x-1/2 rounded border border-red-300/40 bg-black/85 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-200 shadow-[0_10px_26px_rgba(0,0,0,0.6)] backdrop-blur-sm">
           Backend offline — start backend on port 8000.
           {backendReason ? ` ${backendReason}` : ''}
         </div>
       )}
 
-      <div className="pointer-events-auto absolute right-3 top-3 z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
+      <div className="pointer-events-auto absolute right-3 top-24 z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
@@ -238,27 +257,78 @@ export default function MapView() {
             {selectedLocal} · {selectedIso}
           </span>
         </div>
+      <div className="pointer-events-auto absolute inset-x-0 top-0 z-[1000] border-b border-white/15 bg-[#0b0b0b] px-2 py-1 text-white shadow-[0_4px_14px_rgba(0,0,0,0.5)]">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-white/60">Timeline</span>
+            <div className="flex flex-wrap items-center gap-1.5 text-[9px] uppercase tracking-[0.04em] text-white/75">
+              <label className="flex items-center gap-1">
+                <span className="font-mono">Start</span>
+                <input
+                  type="datetime-local"
+                  value={timelineStartInput}
+                  onChange={(e) => {
+                    const ms = new Date(e.target.value).getTime();
+                    if (Number.isFinite(ms)) setTimelineStartMs(ms);
+                  }}
+                  className="rounded border border-white/20 bg-black px-1 py-0.5 text-[10px] text-white"
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                <span className="font-mono">Selected</span>
+                <input
+                  type="datetime-local"
+                  value={selectedInput}
+                  onChange={(e) => {
+                    const ms = new Date(e.target.value).getTime();
+                    if (Number.isFinite(ms)) setSelectedMs(ms);
+                  }}
+                  className="rounded border border-white/20 bg-black px-1 py-0.5 text-[10px] text-white"
+                />
+              </label>
+              <span className="font-mono text-white/50">step {stepMinutes}m</span>
+            </div>
+          </div>
 
-        <input
-          type="range"
-          min={0}
-          max={sliderSteps}
-          step={1}
-          value={sliderValue}
-          onChange={(e) => {
-            const idx = Number(e.target.value);
-            setSelectedMs(rangeStartMs + idx * stepMs);
-          }}
-          className="w-full accent-white"
-          aria-label="Operational timeline"
-        />
+          <input
+            type="range"
+            min={0}
+            max={sliderSteps}
+            step={1}
+            value={sliderValue}
+            onChange={(e) => {
+              const idx = Number(e.target.value);
+              setSelectedMs(visibleStartMs + idx * stepMs);
+            }}
+            className="h-1 w-full accent-white"
+            aria-label="Operational timeline"
+          />
 
-        <div className="mt-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
-          <span>{new Date(rangeStartMs).toISOString()}</span>
-          <span>step {stepMinutes}m</span>
-          <span>{new Date(rangeEndMs).toISOString()}</span>
+          <div className="grid grid-cols-7 gap-0.5">
+            {sectionTimes.map((ms, idx) => (
+              <button
+                key={`${ms}-${idx}`}
+                type="button"
+                onClick={() => setSelectedMs(ms)}
+                className="rounded border border-white/15 bg-[#161616] px-1 py-0.5 text-center font-mono text-[9px] uppercase tracking-[0.02em] text-white/75 hover:bg-white/[0.12]"
+                title={new Date(ms).toISOString()}
+              >
+                {new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function toDatetimeLocalValue(ms: number): string {
+  const d = new Date(ms);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }

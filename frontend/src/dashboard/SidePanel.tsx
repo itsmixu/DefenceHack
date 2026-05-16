@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Activity, BookOpen, ClipboardList, Layers, Radar } from 'lucide-react';
+import { ClipboardList, Layers } from 'lucide-react';
 import LayerToggles from './LayerToggles';
-import SourceStatusList from './SourceStatusList';
 import DrawnList from './DrawnList';
 import BriefingPanel from './briefing/BriefingPanel';
 import PlansList from './PlansList';
@@ -15,6 +15,9 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'drawn', label: 'Drawn', icon: <ClipboardList size={14} /> },
   { id: 'plans', label: 'Plans', icon: <BookOpen size={14} /> },
 ];
+import PlansPanel from './PlansPanel';
+
+type Tab = 'layers' | 'drawn';
 
 export default function SidePanel() {
   const [tab, setTab] = useState<Tab>('layers');
@@ -26,16 +29,19 @@ export default function SidePanel() {
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">DefenceHack — Junction</p>
       </header>
 
-      <nav className="grid grid-cols-5 border-b border-white/10 text-[9px] uppercase tracking-[0.12em]">
-        {TABS.map((t) => (
-          <TabBtn
-            key={t.id}
-            active={tab === t.id}
-            onClick={() => setTab(t.id)}
-            icon={t.icon}
-            label={t.label}
-          />
-        ))}
+      <nav className="grid grid-cols-2 border-b border-white/10 text-[10px] uppercase tracking-[0.16em]">
+        <TabBtn
+          active={tab === 'layers'}
+          onClick={() => setTab('layers')}
+          icon={<Layers size={14} />}
+          label="Layers"
+        />
+        <TabBtn
+          active={tab === 'drawn'}
+          onClick={() => setTab('drawn')}
+          icon={<ClipboardList size={14} />}
+          label="Drawn"
+        />
       </nav>
 
       <main className="flex-1 overflow-y-auto p-3 text-sm text-white/90">
