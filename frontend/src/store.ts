@@ -1114,3 +1114,62 @@ export function captureLiveMapState(map: LeafletMap | null): LiveMapState {
     timelineSelectedMs: useTimelineStore.getState().selectedMs,
   };
 }
+
+// =============================================================================
+// Collab session — leader/follower per active file
+// =============================================================================
+//
+// The first browser to open a file becomes its leader. Later browsers join
+// as followers and receive the leader's edit broadcasts over SSE. This is
+// per-file state — switching to a different active tab tears down the
+// current subscription and joins the new file's session.
+
+export type CollabRole = 'leader' | 'follower';
+
+export interface CollabPeer {
+  sessionId: string;
+  displayName: string;
+  role: CollabRole;
+  joinedAt: number;
+}
+
+interface CollabState {
+  fileId: string | null;
+  sessionId: string | null;
+  role: CollabRole | null;
+  peers: CollabPeer[];
+  leaderName: string | null;
+  setSession: (fileId: string, sessionId: string) => void;
+  setRoster: (
+    fileId: string,
+    leaderSessionId: string | null,
+    peers: CollabPeer[],
+  ) => void;
+  clear: () => void;
+}
+
+export const useCollabStore = create<CollabState>((set) => ({
+  fileId: null,
+  sessionId: null,
+  role: null,
+  peers: [],
+  leaderName: null,
+  setSession: (fileId, sessionId) =>
+    set({ fileId, sessionId, role: null, peers: [], leaderName: null }),
+  setRoster: (fileId, leaderSessionId, peers) =>
+    set((s) => {
+      if (s.fileId !== fileId || !s.sessionId) return s;
+      const mySession = peers.find((p) => p.sessionId === s.sessionId);
+      const leader = peers.find((p) => p.sessionId === leaderSessionId);
+      return {
+        peers,
+        role: mySession?.role ?? null,
+        leaderName: leader ? leader.displayName : null,
+      };
+    }),
+  clear: () =>
+    set({ fileId: null, sessionId: null, role: null, peers: [], leaderName: null }),
+}));
+
+// Callsigns are auto-assigned by the backend (NATO phonetic per join order),
+// so the frontend no longer persists a user-chosen name.

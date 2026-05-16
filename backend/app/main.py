@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .http_client import close_client
-from .routers import analyze, filesystem, layers, operations, sources, tiles, timeline
+from .routers import analyze, collab, filesystem, layers, operations, sources, tiles, timeline
 
 load_dotenv()
 
@@ -43,6 +43,7 @@ app.include_router(analyze.router)
 app.include_router(tiles.router)
 app.include_router(timeline.router)
 app.include_router(filesystem.router)
+app.include_router(collab.router)
 
 
 @app.get("/api/health", tags=["meta"])

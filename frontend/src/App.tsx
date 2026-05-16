@@ -5,6 +5,7 @@ import FileManagerOverlay from './dashboard/FileManagerOverlay';
 import TopBar from './dashboard/TopBar';
 import Toaster from './dashboard/Toaster';
 import DebugPanel from './dashboard/DebugPanel';
+import CollabController from './collab/CollabController';
 import { installFetchInterceptor } from './lib/fetchInterceptor';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
       </div>
       <Toaster />
       <DebugPanel />
+      <CollabController />
     </div>
   );
 }

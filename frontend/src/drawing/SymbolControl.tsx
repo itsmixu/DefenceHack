@@ -155,11 +155,22 @@ export default function SymbolControl() {
         }
       });
 
-      // Render new symbols (e.g. loaded from operation file)
+      // Render new symbols + sync positions of moved ones
       state.features.forEach((f) => {
         if (f.properties?.feature_type !== 'SYMBOL') return;
         const id = String(f.id);
-        if (markersRef.current.has(id)) return;
+        if (markersRef.current.has(id)) {
+          // Sync position if the marker was moved remotely (collab drag).
+          if (f.geometry.type === 'Point') {
+            const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+            const marker = markersRef.current.get(id)!;
+            const cur = marker.getLatLng();
+            if (Math.abs(cur.lat - lat) > 1e-9 || Math.abs(cur.lng - lng) > 1e-9) {
+              marker.setLatLng([lat, lng]);
+            }
+          }
+          return;
+        }
         if (f.geometry.type !== 'Point') return;
 
         const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;

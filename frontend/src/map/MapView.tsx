@@ -41,7 +41,7 @@ const ALL_LAYERS: LayerKey[] = [
 ];
 
 export default function MapView() {
-  const [basemapPanelOpen, setBasemapPanelOpen] = useState(true);
+  const [basemapPanelOpen, setBasemapPanelOpen] = useState(false);
   const [enabledBasemaps, setEnabledBasemaps] = useState<Record<string, boolean>>({
     osm: true,
     mml: false,
