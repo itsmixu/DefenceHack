@@ -47,6 +47,7 @@ from ..analysis.drone_conditions import build_drone_conditions
 from ..analysis.mcoo import build_mcoo
 from ..analysis.mobility import build_mobility
 from ..analysis.terrain_effects import build_terrain_effects
+from ..analysis.weather import build_weather
 from ..bbox import BBox, parse_bbox
 from ..registry import PROVIDERS
 
@@ -91,6 +92,33 @@ async def mobility(
     """
     fc = await build_mobility(bbox, t, vehicle_class)
     return Response(content=fc.model_dump_json(), media_type=GEOJSON_MEDIA)
+
+
+@router.get("/weather")
+async def weather(
+    bbox: BBox = Depends(parse_bbox),
+    t: datetime | None = Query(
+        None,
+        description="ISO-8601 UTC timestamp. The forecast & wind field are "
+                    "centred on this time; ratings reflect this moment.",
+    ),
+) -> dict[str, Any]:
+    """Unified weather analysis — observations, forecast, wind field, and
+    operational ratings.
+
+    One call returns everything the weather UI needs at time `t`:
+
+      observations   — current FMI station readings + area summary
+      forecast       — 48 h hourly timeline at the AO centre
+      wind_field_at_t — 3×3 grid of wind vectors at the queried time (for arrows)
+      wind_field_timeline — first 12 h of wind field (for arrow animation)
+      ratings        — drone, aviation, ground_mobility, ISR, cold-weather
+      thresholds     — doctrinal limits used for ratings
+
+    Wires to the timeline scrubber via `t`. Replaces the older
+    `/api/analyze/drone-conditions` for everything except drone-only views.
+    """
+    return await build_weather(bbox, t)
 
 
 @router.get("/drone-conditions")
