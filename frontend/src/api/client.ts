@@ -1,5 +1,7 @@
 import type {
   AstronomicalResponse,
+  CreatePlanBody,
+  CreateVersionBody,
   DroneConditionsResponse,
   LayerKey,
   LayerResponse,
@@ -16,8 +18,6 @@ import type {
   TimelineSnapshotResponse,
   VehicleClass,
   ViewshedResponse,
-  CreatePlanBody,
-  CreateVersionBody,
   FsFolder,
   FsFileMeta,
   FsFileContent,
@@ -46,18 +46,36 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function fetchJsonAllowEmpty<T>(url: string, init?: RequestInit): Promise<T | null> {
-  const res = await fetch(url, init);
-  if (res.status === 204) return null;
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
-  return (await res.json()) as T;
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  return fetchJson<T>(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
-const jsonBody = (data: unknown): RequestInit => ({
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(data),
-});
+async function putJson<T>(url: string, body: unknown): Promise<T> {
+  return fetchJson<T>(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function patchJson<T>(url: string, body: unknown): Promise<T> {
+  return fetchJson<T>(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function deleteReq(url: string): Promise<void> {
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`DELETE ${url} -> HTTP ${res.status}`);
+  }
+}
 
 // ─── Sources & layers ─────────────────────────────────────────────────────
 
@@ -82,63 +100,52 @@ export function getDroneConditions(query: BboxQuery): Promise<DroneConditionsRes
   return fetchJson<DroneConditionsResponse>(`/api/analyze/drone-conditions${buildQuery(query)}`);
 }
 
-// ── Plans ─────────────────────────────────────────────────────────────────────
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`POST ${url} -> HTTP ${res.status}`);
-  return (await res.json()) as T;
+export function getAstronomical(query: BboxQuery): Promise<AstronomicalResponse> {
+  return fetchJson<AstronomicalResponse>(`/api/analyze/astronomical${buildQuery(query)}`);
 }
 
-async function putJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`PUT ${url} -> HTTP ${res.status}`);
-  return (await res.json()) as T;
+export function getMobility(
+  query: BboxQuery & { vehicle_class?: VehicleClass },
+): Promise<MobilityResponse> {
+  return fetchJson<MobilityResponse>(`/api/analyze/mobility${buildQuery(query)}`);
 }
 
-async function deleteReq(url: string): Promise<void> {
-  const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`DELETE ${url} -> HTTP ${res.status}`);
+export interface ViewshedQuery extends BboxQuery {
+  observer_lon: string;
+  observer_lat: string;
+  observer_height_m?: string;
 }
 
-/** List saved plans. Pass all=true to get every plan (for hierarchy tree). */
-export function listPlans(opts?: { all?: boolean; parentId?: string }): Promise<PlanSummary[]> {
-  const params: Record<string, string> = {};
-  if (opts?.all) params.all = 'true';
-  if (opts?.parentId) params.parent_id = opts.parentId;
-  return fetchJson<PlanSummary[]>(`/api/plans${buildQuery(params)}`);
+export function getViewshed(query: ViewshedQuery): Promise<ViewshedResponse> {
+  return fetchJson<ViewshedResponse>(`/api/analyze/viewshed${buildQuery(query)}`);
+}
+
+// ─── Timeline ─────────────────────────────────────────────────────────────
+
+export function getTimelineCapabilities(): Promise<TimelineCapabilitiesResponse> {
+  return fetchJson<TimelineCapabilitiesResponse>('/api/timeline/capabilities');
+}
+
+export function getTimelineSnapshot(
+  query: BboxQuery & { sources?: string },
+): Promise<TimelineSnapshotResponse> {
+  return fetchJson<TimelineSnapshotResponse>(`/api/timeline/snapshot${buildQuery(query)}`);
 }
 
 /**
- * Capture current conditions (FMI weather) at the given bbox and time.
- * Returns a condensed snapshot object suitable for storing in a plan.
- * Returns undefined if the API is unavailable or no data exists.
+ * Capture current FMI conditions for the given bbox. Returns a condensed
+ * snapshot object suitable for storing in a plan/version. Returns undefined
+ * if the API is unavailable or no observations are present.
  */
 export async function fetchConditionsSnapshot(
   bbox: string,
 ): Promise<Record<string, unknown> | undefined> {
   try {
     const t = new Date().toISOString();
-    const params = new URLSearchParams({ bbox, t, sources: 'fmi' });
-    const res = await fetch(`/api/timeline/snapshot?${params}`);
-    if (!res.ok) return undefined;
-    const data = await res.json() as {
-      t: string;
-      layers: { fmi?: { features: Array<{ properties: Record<string, unknown> }> } };
-    };
+    const data = await getTimelineSnapshot({ bbox, t, sources: 'fmi' });
     const fmiFeatures = data.layers?.fmi?.features ?? [];
     if (fmiFeatures.length === 0) return { fetched_at: t };
-    // Aggregate a simple summary from the first few stations.
-    const summaries = fmiFeatures.slice(0, 3).map((f) => f.properties);
-    const first = summaries[0];
+    const first = (fmiFeatures[0].properties ?? {}) as Record<string, unknown>;
     return {
       fetched_at: t,
       station: first.station_name ?? first.name ?? 'unknown',
@@ -155,50 +162,65 @@ export async function fetchConditionsSnapshot(
   }
 }
 
-/** Get a single plan with full drawn_features. */
+// ── Plans ─────────────────────────────────────────────────────────────────
+
+/** List saved plans. Pass `all: true` for every plan (hierarchy tree), or `parentId` for children of one. */
+export function listPlans(opts?: { all?: boolean; parentId?: string }): Promise<PlanSummary[]> {
+  const params: Record<string, string | undefined> = {};
+  if (opts?.all) params.all = 'true';
+  if (opts?.parentId) params.parent_id = opts.parentId;
+  return fetchJson<PlanSummary[]>(`/api/plans${buildQuery(params)}`);
+}
+
 export function getPlan(id: string): Promise<Plan> {
   return fetchJson<Plan>(`/api/plans/${id}`);
 }
 
-/** Create a new plan. Returns the saved plan with its generated id. */
 export function createPlan(body: CreatePlanBody): Promise<Plan> {
   return postJson<Plan>('/api/plans', body);
 }
 
-/** Overwrite plan fields (partial update — send only what changed). */
 export function updatePlan(id: string, body: Partial<CreatePlanBody>): Promise<Plan> {
   return putJson<Plan>(`/api/plans/${id}`, body);
 }
 
-/** Delete a plan permanently. */
 export function deletePlan(id: string): Promise<void> {
   return deleteReq(`/api/plans/${id}`);
 }
 
-// ── Plan versions ─────────────────────────────────────────────────────────────
+// ── Plan versions ─────────────────────────────────────────────────────────
 
-/** List all version snapshots for a plan (oldest first, no drawn_features). */
 export function listPlanVersions(planId: string): Promise<PlanVersionSummary[]> {
   return fetchJson<PlanVersionSummary[]>(`/api/plans/${planId}/versions`);
 }
 
-/** Get a specific version snapshot with full drawn_features. */
 export function getPlanVersion(planId: string, version: number): Promise<PlanVersion> {
   return fetchJson<PlanVersion>(`/api/plans/${planId}/versions/${version}`);
 }
 
-/**
- * Save the current map state as a named, immutable version snapshot.
- *
- * Call this when the commander clicks "Save version" — pass the current
- * drawn_features, active_layers, bbox, notes, and optionally a live
- * conditions_snapshot (last FMI/astronomy response bodies).
- */
 export function createPlanVersion(planId: string, body: CreateVersionBody): Promise<PlanVersion> {
   return postJson<PlanVersion>(`/api/plans/${planId}/versions`, body);
 }
 
-// ── Filesystem ────────────────────────────────────────────────────────────────
+// ── Operations ────────────────────────────────────────────────────────────
+
+export function listOperations(planId?: string): Promise<Operation[]> {
+  return fetchJson<Operation[]>(`/api/operations${planId ? `?plan_id=${planId}` : ''}`);
+}
+
+export function getOperation(id: string): Promise<Operation> {
+  return fetchJson<Operation>(`/api/operations/${id}`);
+}
+
+export function createOperation(body: Omit<Operation, 'id'>): Promise<Operation> {
+  return postJson<Operation>('/api/operations', body);
+}
+
+export function recordOperationActual(id: string, body: OperationActual): Promise<Operation> {
+  return patchJson<Operation>(`/api/operations/${id}/actual`, body);
+}
+
+// ── Filesystem ────────────────────────────────────────────────────────────
 
 export function fsGetTree(): Promise<FsTree> {
   return fetchJson<FsTree>('/api/fs/tree');
@@ -216,69 +238,32 @@ export function fsOpenFile(id: string): Promise<FsFileContent> {
   return fetchJson<FsFileContent>(`/api/fs/files/${id}`);
 }
 
-export async function fsSaveFile(body: FsSaveBody): Promise<FsFileMeta> {
-  const res = await fetch('/api/fs/files', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`POST /api/fs/files -> HTTP ${res.status}`);
-  return (await res.json()) as FsFileMeta;
+export function fsSaveFile(body: FsSaveBody): Promise<FsFileMeta> {
+  return postJson<FsFileMeta>('/api/fs/files', body);
 }
 
-export async function fsRenameFile(id: string, name: string): Promise<FsFileMeta> {
-  const res = await fetch(`/api/fs/files/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) throw new Error(`PATCH /api/fs/files/${id} -> HTTP ${res.status}`);
-  return (await res.json()) as FsFileMeta;
+export function fsRenameFile(id: string, name: string): Promise<FsFileMeta> {
+  return patchJson<FsFileMeta>(`/api/fs/files/${id}`, { name });
 }
 
-export async function fsMoveFile(id: string, folder_id: string | null): Promise<FsFileMeta> {
-  const res = await fetch(`/api/fs/files/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder_id }),
-  });
-  if (!res.ok) throw new Error(`PATCH /api/fs/files/${id} -> HTTP ${res.status}`);
-  return (await res.json()) as FsFileMeta;
+export function fsMoveFile(id: string, folder_id: string | null): Promise<FsFileMeta> {
+  return patchJson<FsFileMeta>(`/api/fs/files/${id}`, { folder_id });
 }
 
-export async function fsDuplicateFile(id: string, name?: string): Promise<FsFileMeta> {
-  const res = await fetch(`/api/fs/files/${id}/duplicate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(name ? { name } : {}),
-  });
-  if (!res.ok) throw new Error(`POST /api/fs/files/${id}/duplicate -> HTTP ${res.status}`);
-  return (await res.json()) as FsFileMeta;
+export function fsDuplicateFile(id: string, name?: string): Promise<FsFileMeta> {
+  return postJson<FsFileMeta>(`/api/fs/files/${id}/duplicate`, name ? { name } : {});
 }
 
-export async function fsDeleteFile(id: string): Promise<void> {
-  const res = await fetch(`/api/fs/files/${id}`, { method: 'DELETE' });
-  if (!res.ok && res.status !== 204) throw new Error(`DELETE /api/fs/files/${id} -> HTTP ${res.status}`);
+export function fsDeleteFile(id: string): Promise<void> {
+  return deleteReq(`/api/fs/files/${id}`);
 }
 
-export async function fsCreateFolder(name: string, parent_id?: string | null): Promise<FsFolder> {
-  const res = await fetch('/api/fs/folders', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, parent_id: parent_id ?? null }),
-  });
-  if (!res.ok) throw new Error(`POST /api/fs/folders -> HTTP ${res.status}`);
-  return (await res.json()) as FsFolder;
+export function fsCreateFolder(name: string, parent_id?: string | null): Promise<FsFolder> {
+  return postJson<FsFolder>('/api/fs/folders', { name, parent_id: parent_id ?? null });
 }
 
-export async function fsRenameFolder(id: string, name: string): Promise<FsFolder> {
-  const res = await fetch(`/api/fs/folders/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) throw new Error(`PATCH /api/fs/folders/${id} -> HTTP ${res.status}`);
-  return (await res.json()) as FsFolder;
+export function fsRenameFolder(id: string, name: string): Promise<FsFolder> {
+  return patchJson<FsFolder>(`/api/fs/folders/${id}`, { name });
 }
 
 export async function fsDeleteFolder(id: string, recursive = false): Promise<void> {

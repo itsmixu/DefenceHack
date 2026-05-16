@@ -1,8 +1,15 @@
+import { useEffect } from 'react';
 import MapView from './map/MapView';
 import SidePanel from './dashboard/SidePanel';
 import Toaster from './dashboard/Toaster';
+import DebugPanel from './dashboard/DebugPanel';
+import { installFetchInterceptor } from './lib/fetchInterceptor';
 
 export default function App() {
+  useEffect(() => {
+    installFetchInterceptor();
+  }, []);
+
   return (
     <div className="relative z-10 flex h-full w-full bg-[#131313] text-white">
       <main className="relative flex-1 border-r border-white/10">
@@ -12,6 +19,7 @@ export default function App() {
         <SidePanel />
       </aside>
       <Toaster />
+      <DebugPanel />
     </div>
   );
 }
