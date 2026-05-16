@@ -1,8 +1,14 @@
 """OpenStreetMap provider via Overpass API.
 
-Returns nodes/ways tagged as hospital, fuel station, or power infrastructure
-inside the bbox. No API key required. Tile servers should not be queried from
-the backend — Overpass is the right tool for tagged features.
+Returns nodes/ways matching IPB-relevant tags inside the bbox.
+Categories:
+  hospital, fuel, power_plant, power_substation — critical infrastructure
+  airfield, helipad                              — aviation assets
+  railway, railway_bridge                        — logistics chokepoints
+  waterway, ford                                 — mobility obstacles / crossings
+
+No API key required. Tile servers should not be queried from the backend
+— Overpass is the right tool for tagged features.
 """
 from __future__ import annotations
 
@@ -19,37 +25,81 @@ from .base import Provider
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 1 day — OSM data changes slowly
 
-# Categories relevant to IPB (challenge.md §"logistics chokepoints", "infrastructure").
-# Tuple of (category, overpass selector). Kept tight to keep responses small.
+# (category, overpass selector, geometry_hint)
+# geometry_hint: "point" = emit Point; "line" = emit first LineString coord as Point
 CATEGORIES: tuple[tuple[str, str], ...] = (
-    ("hospital", '["amenity"="hospital"]'),
-    ("fuel", '["amenity"="fuel"]'),
-    ("power_plant", '["power"="plant"]'),
-    ("power_substation", '["power"="substation"]'),
+    # Critical infrastructure
+    ("hospital",          '["amenity"="hospital"]'),
+    ("fuel",              '["amenity"="fuel"]'),
+    ("power_plant",       '["power"="plant"]'),
+    ("power_substation",  '["power"="substation"]'),
+    # Aviation
+    ("airfield",          '["aeroway"="aerodrome"]'),
+    ("helipad",           '["aeroway"="helipad"]'),
+    # Rail logistics
+    ("railway",           '["railway"="rail"]["bridge"!="yes"]'),
+    ("railway_bridge",    '["railway"="rail"]["bridge"="yes"]'),
+    # Waterway crossings and obstacles
+    ("waterway",          '["waterway"~"^(river|stream|canal)$"]'),
+    ("ford",              '["ford"="yes"]'),
 )
 
 
 def _build_query(bbox: BBox) -> str:
-    bbox_str = f"{bbox.min_lat},{bbox.min_lon},{bbox.max_lat},{bbox.max_lon}"
+    bb = f"{bbox.min_lat},{bbox.min_lon},{bbox.max_lat},{bbox.max_lon}"
     parts: list[str] = []
     for _, sel in CATEGORIES:
-        # nwr = node + way + relation, centered so ways return a representative point
-        parts.append(f"nwr{sel}({bbox_str});")
+        parts.append(f"nwr{sel}({bb});")
     body = "".join(parts)
-    return f"[out:json][timeout:25];({body});out center tags;"
+    return f"[out:json][timeout:30];({body});out center tags;"
 
 
 def _category_for(tags: dict[str, str]) -> str | None:
-    if tags.get("amenity") == "hospital":
-        return "hospital"
-    if tags.get("amenity") == "fuel":
-        return "fuel"
-    power = tags.get("power")
-    if power == "plant":
-        return "power_plant"
-    if power == "substation":
-        return "power_substation"
+    amenity = tags.get("amenity", "")
+    power   = tags.get("power", "")
+    aeroway = tags.get("aeroway", "")
+    railway = tags.get("railway", "")
+    waterway = tags.get("waterway", "")
+    bridge  = tags.get("bridge", "")
+    ford    = tags.get("ford", "")
+
+    if amenity == "hospital":           return "hospital"
+    if amenity == "fuel":               return "fuel"
+    if power == "plant":                return "power_plant"
+    if power == "substation":           return "power_substation"
+    if aeroway == "aerodrome":          return "airfield"
+    if aeroway == "helipad":            return "helipad"
+    if railway == "rail" and bridge == "yes": return "railway_bridge"
+    if railway == "rail":               return "railway"
+    if ford == "yes":                   return "ford"
+    if waterway in ("river", "stream", "canal"): return "waterway"
     return None
+
+
+def _extra_props(tags: dict[str, str], category: str) -> dict[str, Any]:
+    """Pull category-specific useful tags into flat properties."""
+    extra: dict[str, Any] = {}
+    if category == "airfield":
+        extra["icao"] = tags.get("icao")
+        extra["iata"] = tags.get("iata")
+        extra["runway_length_m"] = tags.get("aeroway:runway:length")
+        extra["surface"] = tags.get("surface")
+    elif category in ("railway", "railway_bridge"):
+        extra["electrified"] = tags.get("electrified")
+        extra["gauge_mm"] = tags.get("gauge")
+        extra["max_speed"] = tags.get("maxspeed")
+        extra["load_limit_t"] = tags.get("load_limit")
+    elif category == "waterway":
+        extra["width_m"] = tags.get("width")
+        extra["depth_m"] = tags.get("depth")
+        extra["boat"] = tags.get("boat")
+    elif category == "ford":
+        extra["surface"] = tags.get("surface")
+        extra["maxdepth_m"] = tags.get("maxdepth")
+    elif category == "hospital":
+        extra["beds"] = tags.get("beds")
+        extra["emergency"] = tags.get("emergency")
+    return {k: v for k, v in extra.items() if v is not None}
 
 
 def _element_to_feature(elem: dict[str, Any]) -> dict[str, Any] | None:
@@ -73,7 +123,7 @@ def _element_to_feature(elem: dict[str, Any]) -> dict[str, Any] | None:
             "category": category,
             "name": tags.get("name"),
             "operator": tags.get("operator"),
-            "tags": tags,
+            **_extra_props(tags, category),
         },
     }
 
@@ -88,15 +138,11 @@ class OSMProvider(Provider):
         cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
         if cached is not None:
             self.mark("ok", "served from cache")
-            features = cached.get("features", [])
             return FeatureCollection(
-                features=features,
+                features=cached.get("features", []),
                 meta=LayerMeta(
-                    source=self.id,
-                    status="ok",
-                    reason="served from cache",
-                    bbox=bbox.as_list(),
-                    t=t,
+                    source=self.id, status="ok", reason="served from cache",
+                    bbox=bbox.as_list(), t=t,
                 ),
             )
 
@@ -113,24 +159,28 @@ class OSMProvider(Provider):
         except httpx.HTTPError as e:
             self.mark("unavailable", f"overpass error: {e}")
             return empty_collection(
-                self.id,
-                status="unavailable",
-                reason=f"overpass error: {e}",
-                bbox=bbox.as_list(),
-                t=t,
+                self.id, status="unavailable", reason=f"overpass error: {e}",
+                bbox=bbox.as_list(), t=t,
             )
 
         elements = payload.get("elements", [])
         features = [f for f in (_element_to_feature(e) for e in elements) if f]
+        by_cat: dict[str, int] = {}
+        for f in features:
+            cat = f["properties"]["category"]
+            by_cat[cat] = by_cat.get(cat, 0) + 1
 
         cache.write(self.id, cache_key, {"features": features})
-        self.mark("ok", f"{len(features)} features")
+        status = "ok" if features else "partial"
+        reason = (
+            ", ".join(f"{v} {k}" for k, v in sorted(by_cat.items()))
+            if features else "no features in bbox"
+        )
+        self.mark(status, reason)
         return FeatureCollection(
             features=features,
             meta=LayerMeta(
-                source=self.id,
-                status="ok",
-                bbox=bbox.as_list(),
-                t=t,
+                source=self.id, status=status, reason=reason,
+                bbox=bbox.as_list(), t=t,
             ),
         )

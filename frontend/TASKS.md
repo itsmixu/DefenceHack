@@ -67,8 +67,46 @@ GET /api/analyze/terrain-effects?bbox=...
 → { summary, functions: { maneuver, fires, intelligence, sustainment, protection }, source_status }
    each function: { rating: "unrestricted"|"restricted"|"severely_restricted", rationale, key_factors }
 
-GET /api/analyze/viewshed?bbox=...&observer_lon=&observer_lat=
-→ stub — always returns empty FC with meta.status="unavailable"
+GET /api/analyze/viewshed?bbox=...&observer_lon=&observer_lat=&observer_height_m=2.0
+→ returns Table B-1 horizon circle polygon if observer given, else unavailable
+
+GET /api/analyze/mobility?bbox=...&vehicle_class=tank|wheeled|tracked|logistics|foot
+→ GeoJSON FC — every terrain polygon and road carries:
+     speed_kmh       (0 = impassable)
+     passable        (false on bridges below vehicle weight limit)
+     mcoo_class      go | slow-go | no-go
+     limiting_factor human-readable reason
+     cite            ATP 2-41.1 Appendix B table reference
+Colour the map green→yellow→red by speed_kmh (0=red, max road speed=green).
+
+GET /api/analyze/drone-conditions?bbox=...
+→ {
+    summary: { current_rating: "go"|"marginal"|"no-go", station_count, next_go_window, forecast_hours_available },
+    station_features: [ GeoJSON points with drone_rating per FMI station ],
+    forecast_timeline: [ { time, drone_rating, wind_ms, temp_c, ceiling_m, cloud_cover_pct, ... } ],
+    thresholds: { wind_no_go_ms: 12, ... }
+  }
+
+GET /api/analyze/astronomical?bbox=...&t=ISO8601
+→ GeoJSON FC — 3 Point features (one per day) at bbox centroid, each with:
+     date, sunrise, sunset, civil_dawn, civil_dusk
+     moon_illumination_pct (0–100), moon_phase_days (0–29.5)
+     night_ops_rating: "dark" | "partial" | "bright"
+     darkness_hours
+```
+
+### FMI rain radar WMS (render directly in MapLibre — no backend call)
+```
+Tile URL (WMS):
+https://openwms.fmi.fi/geoserver/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap
+  &LAYERS=Radar:suomi_rr_eureffin
+  &STYLES=&CRS=EPSG:3857&WIDTH=512&HEIGHT=512
+  &FORMAT=image/png&TRANSPARENT=true
+  &BBOX={west},{south},{east},{north}
+
+Add as a MapLibre raster source using the {x}/{y}/{z} tile pattern via Vite proxy
+or use the raw WMS URL with MapLibre's WMS source type. Renders live rain radar
+blobs — refreshes every ~5 min from FMI.
 ```
 
 ### Plans (save map state between sessions)
@@ -209,8 +247,24 @@ Renders as a map fill layer with colours:
 - `no-go` → semi-transparent red  
 Toggle in the Layers panel alongside individual sources.
 
+**Task 19b — SYKE flood / protected areas layer**  
+Source: `syke`. Polygon features. Properties: `category` (flood_risk / protected_area), `mcoo_implication` (no-go / slow-go).  
+Render flood_risk as semi-transparent blue fill with hatching. Protected areas as green outline only.  
+These polygons override terrain colour in the mobility overlay when present.
+
+**Task 19c — FMI HARMONIE forecast layer**  
+Source: `fmi_forecast`. Point features at bbox centroid, one per hourly timestep.  
+Render as a timeline chart in the side panel (not a map layer) — hour × condition grid showing cloud cover, precipitation rate, wind, and drone_rating colour.  
+Also render current timestep as a coloured dot on the map at the centroid point.
+
+**Task 19d — Rain radar WMS overlay**  
+Add the FMI radar WMS tile layer (URL above in API reference) as a MapLibre raster source.  
+Toggle in the Layers panel labelled "Live rain radar". Semi-transparent, refreshes every 5 minutes.  
+No backend call needed — direct WMS from FMI.
+
 **Task 20 — Terrain Effects Matrix card**  
 Fetches `GET /api/analyze/terrain-effects?bbox=...`.  
+Response now includes `mobility` (total_length_km, weighted_mech_speed_kmh, total_capacity_vph) and `weather` (environment_rating, aviation_rating) — display these as additional rows in the briefing card.  
 Renders in the Analysis tab as a 5-row table:  
 | Function | Rating | Rationale | Key factors |  
 Colour-code ratings: unrestricted=green, restricted=amber, severely_restricted=red.  
@@ -258,6 +312,28 @@ List of operations from `GET /api/operations`. For each operation show:
 ---
 
 ### Polish
+
+**Task 21b — Mobility overlay**  
+Fetches `GET /api/analyze/mobility?bbox=...&vehicle_class=<selected>`.  
+Vehicle class selector: dropdown with Tank / Tracked IFV / Wheeled APC / Logistics / Foot.  
+Render as fill layer on the map coloured by `speed_kmh`:  
+  0 km/h → red (impassable), 1–10 → orange, 11–25 → yellow, >25 → green.  
+Show `limiting_factor` in a click popup. Show `passable: false` bridges as red crosshatched lines.  
+Togglable in the Layers panel, separate from MCOO.
+
+**Task 21c — Drone conditions panel**  
+Fetches `GET /api/analyze/drone-conditions?bbox=...`.  
+Shows a "traffic light" header badge: green=go / amber=marginal / red=no-go.  
+Below it: a 48-hour timeline bar chart, each hour coloured by `drone_rating`.  
+Click any hour to see the detailed weather values for that timestep.  
+Show `summary.next_go_window` as "Next launch window: HH:MM".
+
+**Task 21d — Astronomical / night ops panel**  
+Fetches `GET /api/analyze/astronomical?bbox=...`.  
+Shows a 3-day card in the Analysis tab:  
+  Each day: sunrise icon / sunset icon / moon phase icon + illumination %.  
+  Colour-coded `night_ops_rating`: dark=black background / partial=dark blue / bright=grey-blue.  
+Show civil dawn/dusk times since these bound optical observation windows.
 
 **Task 28 — Hillshade / terrain overlay**  
 Add a MapLibre terrain-exaggeration layer using the MML DEM tiles for a 3-D hillshade effect.  
