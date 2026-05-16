@@ -201,8 +201,8 @@ export interface Phase {
   drawn_features: FeatureCollection;
   active_layers: string[];
   notes: string;
+  conditions_snapshot?: Record<string, unknown>;
 }
-
 
 export interface Plan {
   id: string;
@@ -214,17 +214,13 @@ export interface Plan {
   active_layers: string[];
   notes: string;
   role?: string;
-  // Command hierarchy
   unit?: string;
   commander_name?: string;
   parent_plan_id?: string | null;
-  // Phase planning
   phases?: Phase[];
-  // Conditions captured at save time
   conditions_snapshot?: Record<string, unknown>;
 }
 
-/** Summary returned by GET /api/plans (no drawn_features to keep payload small). */
 export type PlanSummary = Omit<Plan, 'drawn_features'>;
 
 export interface PlanVersion {
@@ -292,4 +288,69 @@ export interface CreateVersionBody {
   active_layers?: string[];
   notes?: string;
   conditions_snapshot?: Record<string, unknown>;
+}
+
+// ── Filesystem (new project snapshot system) ──────────────────────────────────
+
+export interface FsFolder {
+  id: string;
+  type: 'folder';
+  name: string;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FsFileMeta {
+  id: string;
+  type: 'file';
+  name: string;
+  folder_id: string | null;
+  created_at: string;
+  updated_at: string;
+  bbox?: [number, number, number, number] | null;
+  active_layers: string[];
+  timeline_selected_ms?: number | null;
+  layer_count: number;
+  feature_count: number;
+  unit?: string;
+  commander_name?: string;
+  parent_file_id?: string | null;
+  notes_preview?: string;
+}
+
+export interface FsFileContent extends FsFileMeta {
+  notes: string;
+  center?: [number, number] | null;
+  zoom?: number | null;
+  drawn_features: FeatureCollection;
+  phases: Phase[];
+  current_phase: number;
+  layer_snapshots: Record<string, FeatureCollection>;
+  conditions: Record<string, unknown>;
+}
+
+export interface FsTree {
+  folders: FsFolder[];
+  files: FsFileMeta[];
+}
+
+export interface FsSaveBody {
+  id?: string;
+  name: string;
+  folder_id?: string | null;
+  bbox?: [number, number, number, number] | null;
+  center?: [number, number] | null;
+  zoom?: number | null;
+  timeline_selected_ms?: number | null;
+  active_layers: string[];
+  drawn_features: FeatureCollection;
+  phases?: Phase[];
+  current_phase?: number;
+  layer_snapshots: Record<string, FeatureCollection>;
+  conditions?: Record<string, unknown>;
+  notes?: string;
+  unit?: string;
+  commander_name?: string;
+  parent_file_id?: string | null;
 }

@@ -18,6 +18,11 @@ import type {
   TimelineSnapshotResponse,
   VehicleClass,
   ViewshedResponse,
+  FsFolder,
+  FsFileMeta,
+  FsFileContent,
+  FsTree,
+  FsSaveBody,
 } from './types';
 
 export interface BboxQuery {
@@ -213,4 +218,58 @@ export function createOperation(body: Omit<Operation, 'id'>): Promise<Operation>
 
 export function recordOperationActual(id: string, body: OperationActual): Promise<Operation> {
   return patchJson<Operation>(`/api/operations/${id}/actual`, body);
+}
+
+// ── Filesystem ────────────────────────────────────────────────────────────
+
+export function fsGetTree(): Promise<FsTree> {
+  return fetchJson<FsTree>('/api/fs/tree');
+}
+
+export function fsGetRecent(limit = 10): Promise<FsFileMeta[]> {
+  return fetchJson<FsFileMeta[]>(`/api/fs/recent?limit=${limit}`);
+}
+
+export function fsSearch(q: string): Promise<FsFileMeta[]> {
+  return fetchJson<FsFileMeta[]>(`/api/fs/search?q=${encodeURIComponent(q)}`);
+}
+
+export function fsOpenFile(id: string): Promise<FsFileContent> {
+  return fetchJson<FsFileContent>(`/api/fs/files/${id}`);
+}
+
+export function fsSaveFile(body: FsSaveBody): Promise<FsFileMeta> {
+  return postJson<FsFileMeta>('/api/fs/files', body);
+}
+
+export function fsRenameFile(id: string, name: string): Promise<FsFileMeta> {
+  return patchJson<FsFileMeta>(`/api/fs/files/${id}`, { name });
+}
+
+export function fsMoveFile(id: string, folder_id: string | null): Promise<FsFileMeta> {
+  return patchJson<FsFileMeta>(`/api/fs/files/${id}`, { folder_id });
+}
+
+export function fsDuplicateFile(id: string, name?: string): Promise<FsFileMeta> {
+  return postJson<FsFileMeta>(`/api/fs/files/${id}/duplicate`, name ? { name } : {});
+}
+
+export function fsDeleteFile(id: string): Promise<void> {
+  return deleteReq(`/api/fs/files/${id}`);
+}
+
+export function fsCreateFolder(name: string, parent_id?: string | null): Promise<FsFolder> {
+  return postJson<FsFolder>('/api/fs/folders', { name, parent_id: parent_id ?? null });
+}
+
+export function fsRenameFolder(id: string, name: string): Promise<FsFolder> {
+  return patchJson<FsFolder>(`/api/fs/folders/${id}`, { name });
+}
+
+export async function fsDeleteFolder(id: string, recursive = false): Promise<void> {
+  const res = await fetch(`/api/fs/folders/${id}?recursive=${recursive}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) {
+    const msg = await res.text().catch(() => res.statusText);
+    throw new Error(msg || `DELETE /api/fs/folders/${id} -> HTTP ${res.status}`);
+  }
 }

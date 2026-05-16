@@ -11,10 +11,10 @@ const baseColorByLayer: Record<LayerKey, string> = {
   statfin: '#a855f7',
   fmi: '#0ea5e9',
   fmi_forecast: '#38bdf8',
-  syke: '#06b6d4',
+  syke: '#2563eb',
   opencellid: '#3b82f6',
   n2yo: '#9333ea',
-  astronomy: '#facc15',
+  astronomy: '#fbbf24',
   exposure: '#dc2626',
   mcoo: '#16a34a',
 };

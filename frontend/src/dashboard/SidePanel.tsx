@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { BookOpen, ClipboardList, Crosshair, Layers, Radar } from 'lucide-react';
+import { BookOpen, ClipboardList, Crosshair, FolderOpen, Layers, Radar } from 'lucide-react';
 import LayerToggles from './LayerToggles';
 import DrawnList from './DrawnList';
 import BriefingPanel from './briefing/BriefingPanel';
 import PlansPanel from './PlansPanel';
 import TacticalTools from './TacticalTools';
+import FileSystemPanel from './FileSystemPanel';
 
-type Tab = 'layers' | 'briefing' | 'tools' | 'drawn' | 'plans';
+type Tab = 'layers' | 'briefing' | 'tools' | 'files' | 'drawn' | 'plans';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'layers', label: 'Layers', icon: <Layers size={12} /> },
   { id: 'briefing', label: 'Brief', icon: <Radar size={12} /> },
   { id: 'tools', label: 'Tools', icon: <Crosshair size={12} /> },
+  { id: 'files', label: 'Files', icon: <FolderOpen size={12} /> },
   { id: 'drawn', label: 'Drawn', icon: <ClipboardList size={12} /> },
   { id: 'plans', label: 'Plans', icon: <BookOpen size={12} /> },
 ];
@@ -26,7 +28,7 @@ export default function SidePanel() {
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">DefenceHack — Junction</p>
       </header>
 
-      <nav className="grid grid-cols-5 border-b border-white/10 text-[9px] uppercase tracking-[0.12em]">
+      <nav className="grid grid-cols-6 border-b border-white/10 text-[9px] uppercase tracking-[0.12em]">
         {TABS.map((t) => (
           <TabBtn
             key={t.id}
@@ -42,6 +44,7 @@ export default function SidePanel() {
         {tab === 'layers' && <LayerToggles />}
         {tab === 'briefing' && <BriefingPanel />}
         {tab === 'tools' && <TacticalTools />}
+        {tab === 'files' && <FileSystemPanel />}
         {tab === 'drawn' && <DrawnList />}
         {tab === 'plans' && <PlansPanel />}
       </main>
