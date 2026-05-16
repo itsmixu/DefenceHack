@@ -223,13 +223,46 @@ Render as choropleth fill by population density (population / area_km2). Add cli
 Source: `fmi`. Point features, one per weather station. Properties nested under `measurements`: `temperature`, `windspeedms`, `precipitation1h`.  
 Render as circle markers. Click popup shows the measurements table.
 
-**Task 16 — OpenCelliD layer**  
-Source: `opencellid`. Mix of Point (towers) and Polygon (coverage rings).  
-Render tower points as small antenna icons; coverage polygons as low-opacity blue fills.
+**Task 16 — OpenCelliD layer (cell towers + coverage rings)**
 
-**Task 17 — N2YO satellite layer**  
-Source: `n2yo`. Point features. Properties: `name`, `category` (earth_observation / weather / other), `altitude_km`.  
-Render as moving dots (or static at fetch time). Category colours: EO=purple, weather=cyan, other=grey.
+Source: `opencellid`. Each tower produces **two features**:
+- `category: "tower"` — Point at the tower location.
+- `category: "coverage"` — Polygon (geodesic circle) showing estimated coverage radius.
+
+Properties on both: `radio` (NR/LTE/UMTS/GSM), `radius_m`, `mcc`, `mnc`, `signal_strength`.
+
+Coverage radii by technology (realistic field estimates for Finnish terrain):
+| Radio | Radius  | Use                        |
+|-------|---------|----------------------------|
+| NR    | 1 km    | 5G urban small cell        |
+| LTE   | 5 km    | 4G macro cell              |
+| UMTS  | 8 km    | 3G                         |
+| GSM   | 15 km   | 2G rural (can reach 35 km) |
+
+**UI:**
+- Tower Points: small antenna icon, colour by radio (5G=green, 4G=blue, 3G=yellow, 2G=grey).
+- Coverage Polygons: low-opacity filled circles matching tower colour. Togglable separately from tower dots.
+- Click tower → popup: radio type, estimated radius, MCC/MNC (operator), signal strength.
+- Note in UI: "Coverage radius is an estimate based on radio type. Actual range varies with terrain and load."
+- No real-time disabled-tower API exists; show all towers as "active" unless you want to add a manual override toggle.
+
+**Task 17 — N2YO satellite layer (positions + footprint circles)**
+
+Source: `n2yo`. Each satellite produces **two features**:
+- `feature_type: "position"` — Point at the current sub-satellite point (ground track position).
+- `feature_type: "footprint"` — Polygon (geodesic circle) showing the visibility horizon.
+
+Key properties: `satname`, `satid`, `cospar_id`, `altitude_km`, `footprint_radius_km`, `category`.
+
+Footprint = the area from which the satellite is above the horizon (elevation ≥ 0°).
+A satellite at 500 km altitude has a ~2500 km footprint radius — this is the "is the satellite watching us?" boundary.
+
+**UI:**
+- Position Points: satellite icon. Colour by category: earth_observation=purple, weather=cyan.
+- Footprint Polygons: very low opacity (5–10%) filled circle matching category colour. Togglable.
+- Click satellite → popup: name, COSPAR ID, altitude, footprint radius, launch date.
+- Add a legend note: "Footprint = visibility horizon. Imaging swath is narrower (sensor-dependent)."
+- N2YO data is live (TLE updated continuously) — show a "fetched N min ago" indicator using the cache age.
 
 **Task 18 — Exposure danger layer**  
 Source: `exposure`. Polygon features. Properties: `danger_level` (1–5, lower = more cover).  
@@ -283,8 +316,64 @@ A separate "Data sources" tab showing all sources from `GET /api/sources`.
 For each source: name, description, current status (fetched from the last layer response's `meta`), and a "Fetch now" button.  
 **Judges specifically look for this transparency.**
 
-**Task 23 — Time scrubber**  
-Datetime picker at the bottom of the screen. When set, appends `?t=<ISO8601>` to all layer and analysis fetches. Lets users replay historical weather / satellite positions.
+**Task 23 — Time scrubber (use the timeline API below)**
+
+The backend provides a dedicated timeline API so you only need **one request per scrub event** instead of N parallel layer requests.
+
+#### Step 1 — on mount, fetch capabilities
+
+```
+GET /api/timeline/capabilities
+```
+
+Response:
+```json
+{
+  "time_aware_sources": ["fmi", "osm", "astronomy", "statfin"],
+  "snapshot_sources":   ["fmi", "osm", "astronomy"],
+  "oldest_supported_date": "2007-10-08",
+  "sources": {
+    "fmi":       { "time_aware": true, "min_date": "2010-01-01", "resolution": "1h", "note": "..." },
+    "osm":       { "time_aware": true, "min_date": "2007-10-08", "resolution": "1s", "note": "..." },
+    "astronomy": { "time_aware": true, "min_date": "1900-01-01", "resolution": "1s", "note": "..." },
+    "n2yo":      { "time_aware": false, "reason": "real-time only" },
+    ...
+  }
+}
+```
+
+Use `oldest_supported_date` to set the scrubber's minimum date. Grey out layer toggles whose `time_aware === false` when a past date is selected — show the `reason` in a tooltip.
+
+#### Step 2 — on each scrub event, call snapshot
+
+```
+GET /api/timeline/snapshot?bbox=WEST,SOUTH,EAST,NORTH&t=2024-01-15T12:00:00Z&sources=fmi,osm,astronomy
+```
+
+Response:
+```json
+{
+  "t":    "2024-01-15T12:00:00.000000+00:00",
+  "bbox": [24.5, 60.1, 25.5, 60.5],
+  "layers": {
+    "fmi":       { "type": "FeatureCollection", "features": [...], "meta": { "status": "ok" } },
+    "osm":       { "type": "FeatureCollection", "features": [...], "meta": { "status": "ok" } },
+    "astronomy": { "type": "FeatureCollection", "features": [...], "meta": { "status": "ok" } }
+  },
+  "source_status": { "fmi": "ok", "osm": "ok", "astronomy": "ok" },
+  "meta": { "fetch_ms": 842, "sources_requested": ["fmi","osm","astronomy"], "sources_fetched": [...] }
+}
+```
+
+Replace the live layer data with `layers[sourceId]` — one atomic update so all layers advance to the same `t`. Show `source_status` badges on each layer toggle. Show `meta.fetch_ms` as a "loaded in Xs" indicator.
+
+#### Step 3 — UX
+
+- Datetime picker + play/pause button + step ±1h buttons at the bottom of the screen.
+- While fetching, show a loading spinner and disable the scrubber.
+- When `t` is "now" (cleared), revert to the normal per-layer fetches from `/api/layers/{source}`.
+- `fmi_forecast` layer: hide automatically when `t` is in the past (check `time_aware === false` in capabilities, or `source_status[src] === "unavailable"`).
+- Debounce scrubber drag to ~300 ms before firing the snapshot request.
 
 ---
 
@@ -292,6 +381,47 @@ Datetime picker at the bottom of the screen. When set, appends `?t=<ISO8601>` to
 
 **Task 24 — Save plan button**  
 In the side panel, "Save plan" button that POSTs to `/api/plans` with the current bbox, drawn features (from drawnFeaturesStore), active layers, and a user-provided name. Show success toast.
+
+**Task 24b — Plan version snapshots (learning material)**
+
+Experienced commanders can save named, immutable checkpoints so trainees can scrub through how a plan evolved. Each snapshot captures the exact map state at that moment.
+
+**Save a version:**
+```
+POST /api/plans/{id}/versions
+{
+  "label":             "Initial planning",     // human name shown in the timeline
+  "role":              "commander",             // who saved it
+  "bbox":              [24.5, 60.1, 25.5, 60.5],
+  "drawn_features":    { <GeoJSON FeatureCollection of AOI/NAI/TAI/DP shapes> },
+  "active_layers":     ["fmi", "osm", "mcoo"],
+  "notes":             "Threat assessment: ...",
+  "conditions_snapshot": {                     // optional: capture live data context
+    "fmi":       { <last FMI response> },
+    "astronomy": { <last astronomy response> }
+  }
+}
+```
+Suggested save points: "Initial planning", "After recon", "Commander review", "Final approved".
+
+**List versions (for the trainee's timeline):**
+```
+GET /api/plans/{id}/versions
+→ [ { version, label, role, saved_at, bbox, active_layers, notes }, … ]   // oldest first
+```
+
+**Load a specific version:**
+```
+GET /api/plans/{id}/versions/{version}
+→ { …full snapshot including drawn_features and conditions_snapshot… }
+```
+
+**UX:**
+- Add a "Save version" button next to "Save plan". On click, prompt for a label.
+- In the Saved Plans sidebar, show a "Versions" expander per plan. Each version is a row: label + role + timestamp.
+- Click a version row to restore that map state (drawn_features + active_layers + notes) — **without overwriting the current live map state** (keep it in a local "live" buffer).
+- Show a diff indicator: version N vs N+1 — count of shapes added/removed.
+- Trainees should be able to view all versions but not save new ones (gate by role).
 
 **Task 25 — Saved plans sidebar**  
 List of saved plans from `GET /api/plans`. Click a plan to restore bbox, drawn features, and active layers. Delete button per row.
@@ -321,12 +451,47 @@ Render as fill layer on the map coloured by `speed_kmh`:
 Show `limiting_factor` in a click popup. Show `passable: false` bridges as red crosshatched lines.  
 Togglable in the Layers panel, separate from MCOO.
 
-**Task 21c — Drone conditions panel**  
-Fetches `GET /api/analyze/drone-conditions?bbox=...`.  
-Shows a "traffic light" header badge: green=go / amber=marginal / red=no-go.  
-Below it: a 48-hour timeline bar chart, each hour coloured by `drone_rating`.  
-Click any hour to see the detailed weather values for that timestep.  
-Show `summary.next_go_window` as "Next launch window: HH:MM".
+**Task 21c — Drone conditions panel**
+
+Fetches `GET /api/analyze/drone-conditions?bbox=...` (no API key needed — uses FMI data).
+
+Response shape (key fields):
+```json
+{
+  "summary": {
+    "current_rating": "go" | "marginal" | "no-go",
+    "next_go_window": "2025-06-01T14:00:00Z",
+    "station_count": 4,
+    "forecast_hours_available": 48
+  },
+  "station_features": [
+    {
+      "geometry": { "type": "Point", ... },
+      "properties": {
+        "drone_rating": "marginal",
+        "drone_summary": "Marginal: wind 9 m/s near limit",
+        "limiting_factors": ["wind speed 9.0 m/s (marginal ≥8 m/s)"],
+        "measurements": { "wind_ms": 9.0, "temp_c": 4.0, "visibility_m": 8000, "precip_mmh": 0 }
+      }
+    }
+  ],
+  "forecast_timeline": [
+    { "time": "2025-06-01T14:00:00Z", "drone_rating": "go", "wind_ms": 3.0, "temp_c": 8.0, ... }
+  ],
+  "thresholds": { "wind_marginal_ms": 8.0, "wind_no_go_ms": 12.0, ... }
+}
+```
+
+**UI:**
+- "Traffic light" header badge: green=go / amber=marginal / red=no-go. Show `summary.current_rating`.
+- Per-station map dots coloured by `drone_rating`. Click → popup with `measurements` + `limiting_factors`.
+- 48-hour forecast bar chart: each hour = one bar, coloured go/marginal/no-go. X-axis = time, Y-axis = wind speed.
+- Show `summary.next_go_window` as "Next launch window: HH:MM — DD MMM".
+- Show the three key thresholds from `thresholds`: wind no-go, temperature cold no-go, visibility no-go.
+- Limiting factor examples to display in plain language:
+  - `wind speed X m/s (marginal ≥8 m/s)` → "Too windy (X m/s)"
+  - `temperature X°C (no-go ≤-15°C)`      → "Too cold (X°C)"
+  - `precipitation X mm/h (marginal ≥2)`   → "Too rainy (X mm/h)"
 
 **Task 21d — Astronomical / night ops panel**  
 Fetches `GET /api/analyze/astronomical?bbox=...`.  

@@ -28,18 +28,15 @@ from .base import Provider
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 1 day — OSM data changes slowly
 
-# Categories relevant to IPB (challenge.md §"logistics chokepoints", "infrastructure").
-# Tuple of (category, overpass selector).
 CATEGORIES: tuple[tuple[str, str], ...] = (
-    ("hospital", '["amenity"="hospital"]'),
-    ("clinic", '["amenity"="clinic"]'),
-    ("pharmacy", '["amenity"="pharmacy"]'),
-    ("fuel", '["amenity"="fuel"]'),
+    # Medical
+    ("hospital",         '["amenity"="hospital"]'),
+    ("clinic",           '["amenity"="clinic"]'),
+    ("pharmacy",         '["amenity"="pharmacy"]'),
+    # Energy & logistics
+    ("fuel",             '["amenity"="fuel"]'),
     ("charging_station", '["amenity"="charging_station"]'),
-    ("police", '["amenity"="police"]'),
-    ("fire_station", '["amenity"="fire_station"]'),
-    ("shelter", '["amenity"="shelter"]'),
-    ("power_plant", '["power"="plant"]'),
+    ("power_plant",      '["power"="plant"]'),
     ("power_substation", '["power"="substation"]'),
     # Emergency services
     ("police",           '["amenity"="police"]'),
@@ -57,37 +54,43 @@ CATEGORIES: tuple[tuple[str, str], ...] = (
 )
 
 
-def _build_query(bbox: BBox) -> str:
+def _build_query(bbox: BBox, t: datetime | None = None) -> str:
     bb = f"{bbox.min_lat},{bbox.min_lon},{bbox.max_lat},{bbox.max_lon}"
     parts: list[str] = []
     for _, sel in CATEGORIES:
         parts.append(f"nwr{sel}({bb});")
     body = "".join(parts)
-    return f"[out:json][timeout:30];({body});out center tags;"
+    # Overpass supports historical queries via [date:"..."] — returns OSM state
+    # as it existed at that moment. Minimum date: 2007-10-08 (OSM history start).
+    date_filter = f'[date:"{t.strftime("%Y-%m-%dT%H:%M:%SZ")}"]' if t else ""
+    return f"[out:json][timeout:30]{date_filter};({body});out center tags;"
 
 
 def _category_for(tags: dict[str, str]) -> str | None:
-    if tags.get("amenity") == "hospital":
-        return "hospital"
-    if tags.get("amenity") == "clinic":
-        return "clinic"
-    if tags.get("amenity") == "pharmacy":
-        return "pharmacy"
-    if tags.get("amenity") == "fuel":
-        return "fuel"
-    if tags.get("amenity") == "charging_station":
-        return "charging_station"
-    if tags.get("amenity") == "police":
-        return "police"
-    if tags.get("amenity") == "fire_station":
-        return "fire_station"
-    if tags.get("amenity") == "shelter":
-        return "shelter"
-    power = tags.get("power")
-    if power == "plant":
-        return "power_plant"
-    if power == "substation":
-        return "power_substation"
+    amenity  = tags.get("amenity", "")
+    power    = tags.get("power", "")
+    aeroway  = tags.get("aeroway", "")
+    railway  = tags.get("railway", "")
+    waterway = tags.get("waterway", "")
+    bridge   = tags.get("bridge", "")
+    ford     = tags.get("ford", "")
+
+    if amenity == "hospital":           return "hospital"
+    if amenity == "clinic":             return "clinic"
+    if amenity == "pharmacy":           return "pharmacy"
+    if amenity == "fuel":               return "fuel"
+    if amenity == "charging_station":   return "charging_station"
+    if amenity == "police":             return "police"
+    if amenity == "fire_station":       return "fire_station"
+    if amenity == "shelter":            return "shelter"
+    if power == "plant":                return "power_plant"
+    if power == "substation":           return "power_substation"
+    if aeroway == "aerodrome":          return "airfield"
+    if aeroway == "helipad":            return "helipad"
+    if railway == "rail" and bridge == "yes": return "railway_bridge"
+    if railway == "rail":               return "railway"
+    if ford == "yes":                   return "ford"
+    if waterway in ("river", "stream", "canal"): return "waterway"
     return None
 
 
@@ -153,9 +156,14 @@ class OSMProvider(Provider):
         super().__init__(id="osm", label="OpenStreetMap — Overpass API")
 
     async def fetch(self, bbox: BBox, t: datetime | None) -> FeatureCollection:
-        cache_key = {"bbox": bbox.as_list(), "categories": [c for c, _ in CATEGORIES]}
+        # Historical OSM data is immutable, so cache keyed by day is fine.
+        # Current queries (t=None) still use the standard 24-h TTL.
+        date_key = t.strftime("%Y-%m-%d") if t else None
+        ttl = 30 * 24 * 60 * 60 if date_key else CACHE_TTL_SECONDS  # historical = 30 days
+        cache_key = {"bbox": bbox.as_list(), "categories": [c for c, _ in CATEGORIES],
+                     "date": date_key}
 
-        cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
+        cached = cache.read(self.id, cache_key, ttl)
         if cached is not None:
             self.mark("ok", "served from cache")
             return FeatureCollection(
@@ -166,7 +174,7 @@ class OSMProvider(Provider):
                 ),
             )
 
-        query = _build_query(bbox)
+        query = _build_query(bbox, t)
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(

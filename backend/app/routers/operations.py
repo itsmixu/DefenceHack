@@ -62,6 +62,55 @@ def delete_plan(plan_id: str) -> None:
         raise HTTPException(404, f"plan '{plan_id}' not found")
 
 
+# ── Plan versions ─────────────────────────────────────────────────────────
+#
+# Explicit version snapshots let experienced commanders save named checkpoints
+# ("Initial planning", "After recon", "Final approved") so trainees can scrub
+# through how a plan evolved from first draft to approved order.
+#
+# Versions are immutable once saved — POST to create, no PUT/DELETE.
+
+@router.post("/plans/{plan_id}/versions", status_code=201)
+def create_plan_version(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Save the current plan state as a named, immutable version snapshot.
+
+    Body fields:
+      label             (str)  Human name: "Initial planning", "After recon"
+      role              (str)  Who is saving: "commander", "trainee", …
+      bbox              (list) [west, south, east, north]
+      drawn_features    (obj)  GeoJSON FeatureCollection of map shapes
+      active_layers     (list) Layer IDs that were toggled on
+      notes             (str)  Free-text planning notes
+      conditions_snapshot (obj) Optional: current weather/layer data captured
+                                at save time for context (FMI, astronomy, etc.)
+    """
+    if store.get_plan(plan_id) is None:
+        raise HTTPException(404, f"plan '{plan_id}' not found")
+    return store.save_plan_version(
+        plan_id,
+        data=body,
+        label=body.get("label", ""),
+        role=body.get("role"),
+    )
+
+
+@router.get("/plans/{plan_id}/versions")
+def list_plan_versions(plan_id: str) -> list[dict[str, Any]]:
+    """List all version snapshots for a plan (oldest first, no drawn_features)."""
+    if store.get_plan(plan_id) is None:
+        raise HTTPException(404, f"plan '{plan_id}' not found")
+    return store.list_plan_versions(plan_id)
+
+
+@router.get("/plans/{plan_id}/versions/{version}")
+def get_plan_version(plan_id: str, version: int) -> dict[str, Any]:
+    """Retrieve a specific version snapshot (includes drawn_features)."""
+    v = store.get_plan_version(plan_id, version)
+    if v is None:
+        raise HTTPException(404, f"version {version} of plan '{plan_id}' not found")
+    return v
+
+
 # ── Operations ────────────────────────────────────────────────────────────
 
 @router.post("/operations", status_code=201)

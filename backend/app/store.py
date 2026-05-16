@@ -20,9 +20,10 @@ from typing import Any
 
 DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
 PLANS_DIR = DATA_ROOT / "plans"
+VERSIONS_DIR = DATA_ROOT / "plan_versions"
 OPS_DIR = DATA_ROOT / "operations"
 
-for _d in (PLANS_DIR, OPS_DIR):
+for _d in (PLANS_DIR, VERSIONS_DIR, OPS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 
@@ -88,6 +89,73 @@ def delete_plan(plan_id: str) -> bool:
         p.unlink()
         return True
     return False
+
+
+# ── Plan versions ─────────────────────────────────────────────────────────────
+#
+# Each plan can have multiple version snapshots, saved explicitly by the user
+# (e.g. "Initial planning", "After recon", "Final approved"). Versions are
+# immutable once written — they're the historical record trainees learn from.
+#
+# File layout:  data/plan_versions/<plan_id>/<version_number>.json
+#   version_number is a 1-based integer, auto-incremented.
+
+def _versions_dir(plan_id: str) -> Path:
+    d = VERSIONS_DIR / plan_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_plan_version(
+    plan_id: str,
+    data: dict[str, Any],
+    label: str = "",
+    role: str | None = None,
+) -> dict[str, Any]:
+    """Snapshot the current plan state as a new immutable version.
+
+    `label` is a human name like "Initial planning" or "After recon".
+    `role`  is the author role (e.g. "commander", "trainee").
+    `data`  should be the full plan body (bbox, drawn_features, active_layers,
+            notes, conditions_snapshot — whatever the frontend wants to preserve).
+    """
+    d = _versions_dir(plan_id)
+    existing = sorted(d.glob("*.json"), key=lambda f: int(f.stem))
+    next_num = len(existing) + 1
+    version: dict[str, Any] = {
+        "plan_id": plan_id,
+        "version": next_num,
+        "label": label or f"Version {next_num}",
+        "role": role,
+        "saved_at": _now(),
+        "bbox": data.get("bbox"),
+        "drawn_features": data.get("drawn_features", {"type": "FeatureCollection", "features": []}),
+        "active_layers": data.get("active_layers", []),
+        "notes": data.get("notes", ""),
+        # Optional field: a conditions snapshot captured at save time.
+        # Frontend should include {"fmi": {...}, "astronomy": {...}, ...} if available.
+        "conditions_snapshot": data.get("conditions_snapshot"),
+    }
+    (d / f"{next_num}.json").write_text(json.dumps(version))
+    return version
+
+
+def list_plan_versions(plan_id: str) -> list[dict[str, Any]]:
+    """Return all versions for a plan, oldest first, omitting drawn_features."""
+    d = _versions_dir(plan_id)
+    versions = []
+    for p in sorted(d.glob("*.json"), key=lambda f: int(f.stem)):
+        try:
+            v = json.loads(p.read_text())
+            versions.append({k: val for k, val in v.items() if k != "drawn_features"})
+        except (json.JSONDecodeError, OSError):
+            continue
+    return versions
+
+
+def get_plan_version(plan_id: str, version: int) -> dict[str, Any] | None:
+    p = _versions_dir(plan_id) / f"{version}.json"
+    return json.loads(p.read_text()) if p.exists() else None
 
 
 # ── Operations ───────────────────────────────────────────────────────────────
