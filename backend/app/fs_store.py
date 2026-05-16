@@ -29,13 +29,15 @@ FILE SCHEMA (content/<id>.json):
   timeline_selected_ms                             — timeline position (ms epoch)
   active_layers                                    — which layer toggles were on
   drawn_features                                   — GeoJSON FeatureCollection of shapes
-  phases                                           — up to 5 phase objects
-  current_phase                                    — active phase index
   layer_snapshots                                  — {layer_id: GeoJSON FC}
                                                      KEY FIELD: actual fetched data
   conditions                                       — {fmi: {...}, astronomy: {...}}
   notes                                            — free-text
   unit, commander_name, parent_file_id             — command hierarchy
+
+The whole map state lives at the top level of the file — there is no
+per-phase substructure. The v2 .ipb.json export still emits a single
+phase wrapper for backwards compatibility with the on-disk format.
 
 FOLDER SCHEMA (stored inline in index.json):
   id, name, parent_id, created_at, updated_at
@@ -56,6 +58,10 @@ INDEX_FILE  = FS_ROOT / "index.json"
 
 for _d in (FS_ROOT, CONTENT_DIR):
     _d.mkdir(parents=True, exist_ok=True)
+
+# In-memory cache of the index file. Read once, refreshed when mtime changes.
+_index_cache: dict[str, Any] | None = None
+_index_mtime: float = 0.0
 
 
 PHASE_COLORS = [
@@ -275,9 +281,6 @@ def save_file(data: dict[str, Any]) -> dict[str, Any]:
             "drawn_features",
             {"type": "FeatureCollection", "features": []},
         ),
-        # Phase planning
-        "phases":            data.get("phases", []),
-        "current_phase":     data.get("current_phase", 0),
         # === THE CORE SNAPSHOT ===
         # Actual GeoJSON features returned by every active layer at save time.
         # Opening this file injects these directly into the feature cache so
@@ -437,70 +440,32 @@ def export_file_v2(file_id: str) -> dict[str, Any] | None:
         folder_path.insert(0, folder["name"])
         fid = folder.get("parent_id")
 
-    stored_phases: list[dict[str, Any]] = content.get("phases") or []
-    current_phase_id: int = content.get("current_phase") or 1
-
-    if not stored_phases:
-        # Legacy single-state file — wrap entire file as Phase 1
-        v2_phases: list[dict[str, Any]] = [{
-            "phase_id": 1,
-            "name": "Phase 1",
-            "color": PHASE_COLORS[0],
-            "order": 0,
-            "notes": content.get("notes", ""),
-            "viewport": {
-                "bbox":   content.get("bbox"),
-                "center": content.get("center"),
-                "zoom":   content.get("zoom"),
-            },
-            "timeline": {"selected_ms": content.get("timeline_selected_ms")},
-            "active_layers": content.get("active_layers", []),
-            "drawn_features": content.get(
-                "drawn_features", {"type": "FeatureCollection", "features": []}
-            ),
-            "snapshot": {
-                "captured_at":    content.get("updated_at"),
-                "conditions":     content.get("conditions", {}),
-                "layer_snapshots": content.get("layer_snapshots", {}),
-            },
-        }]
-    else:
-        v2_phases = []
-        for i, ph in enumerate(stored_phases):
-            phase_id: int = ph.get("id", i + 1)
-            is_current = phase_id == current_phase_id
-            # Active phase falls back to file-level snapshots if phase has none yet
-            snapshots = ph.get("layer_snapshots") or (
-                content.get("layer_snapshots", {}) if is_current else {}
-            )
-            conditions = ph.get("conditions") or (
-                content.get("conditions", {}) if is_current else {}
-            )
-            v2_phases.append({
-                "phase_id": phase_id,
-                "name":     ph.get("name", f"Phase {phase_id}"),
-                "color":    ph.get("color", PHASE_COLORS[(phase_id - 1) % len(PHASE_COLORS)]),
-                "order":    i,
-                "notes":    ph.get("notes", ""),
-                "viewport": {
-                    "bbox":   ph.get("bbox")   or (content.get("bbox")   if is_current else None),
-                    "center": ph.get("center") or (content.get("center") if is_current else None),
-                    "zoom":   ph.get("zoom")   or (content.get("zoom")   if is_current else None),
-                },
-                "timeline": {
-                    "selected_ms": ph.get("timeline_selected_ms")
-                    or (content.get("timeline_selected_ms") if is_current else None),
-                },
-                "active_layers": ph.get("active_layers", []),
-                "drawn_features": ph.get(
-                    "drawn_features", {"type": "FeatureCollection", "features": []}
-                ),
-                "snapshot": {
-                    "captured_at":    content.get("updated_at"),
-                    "conditions":     conditions,
-                    "layer_snapshots": snapshots,
-                },
-            })
+    # One save-file = one complete map state. The v2 export format still
+    # carries a phases[] array (for on-disk compatibility), so wrap the
+    # file's state as a single phase.
+    v2_phases: list[dict[str, Any]] = [{
+        "phase_id": 1,
+        "name": "Map",
+        "color": PHASE_COLORS[0],
+        "order": 0,
+        "notes": content.get("notes", ""),
+        "viewport": {
+            "bbox":   content.get("bbox"),
+            "center": content.get("center"),
+            "zoom":   content.get("zoom"),
+        },
+        "timeline": {"selected_ms": content.get("timeline_selected_ms")},
+        "active_layers": content.get("active_layers", []),
+        "drawn_features": content.get(
+            "drawn_features", {"type": "FeatureCollection", "features": []}
+        ),
+        "snapshot": {
+            "captured_at":    content.get("updated_at"),
+            "conditions":     content.get("conditions", {}),
+            "layer_snapshots": content.get("layer_snapshots", {}),
+        },
+    }]
+    current_phase_id = 1
 
     return {
         "format":         "ipb-operation",
@@ -543,41 +508,17 @@ def import_file_v2(data: dict[str, Any], strategy: str = "fresh") -> dict[str, A
     phases_v2: list[dict[str, Any]] = data.get("phases", [])
     active_phase_id: int = data.get("active_phase_id", 1)
 
-    # Convert v2 phase shape → internal Phase schema
-    internal_phases: list[dict[str, Any]] = []
-    for ph in phases_v2:
-        vp = ph.get("viewport", {})
-        tl = ph.get("timeline", {})
-        ss = ph.get("snapshot", {})
-        pid = ph.get("phase_id", len(internal_phases) + 1)
-        internal_phases.append({
-            "id":                  pid,
-            "name":                ph.get("name", f"Phase {pid}"),
-            "color":               ph.get("color", PHASE_COLORS[(pid - 1) % len(PHASE_COLORS)]),
-            "notes":               ph.get("notes", ""),
-            "bbox":                vp.get("bbox"),
-            "center":              vp.get("center"),
-            "zoom":                vp.get("zoom"),
-            "timeline_selected_ms": tl.get("selected_ms"),
-            "active_layers":       ph.get("active_layers", []),
-            "drawn_features":      ph.get("drawn_features", {"type": "FeatureCollection", "features": []}),
-            "layer_snapshots":     ss.get("layer_snapshots", {}),
-            "conditions":          ss.get("conditions", {}),
-        })
-
-    # Use active phase for top-level file state
+    # Pick the active phase (or the first one) — its state becomes the
+    # entire file. Other phases in a legacy multi-phase export are dropped.
     active_ph = next((p for p in phases_v2 if p.get("phase_id") == active_phase_id), None)
     if not active_ph and phases_v2:
         active_ph = phases_v2[0]
-        active_phase_id = active_ph.get("phase_id", 1)
 
     save_body: dict[str, Any] = {
         "name":            file_info.get("name", "Imported Operation"),
         "notes":           file_info.get("notes", ""),
         "unit":            file_info.get("unit", ""),
         "commander_name":  file_info.get("commander_name", ""),
-        "phases":          internal_phases,
-        "current_phase":   active_phase_id,
     }
 
     if active_ph:

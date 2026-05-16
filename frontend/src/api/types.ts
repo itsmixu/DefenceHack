@@ -382,8 +382,6 @@ export interface FsFileContent extends FsFileMeta {
   center?: [number, number] | null;
   zoom?: number | null;
   drawn_features: FeatureCollection;
-  phases: Phase[];
-  current_phase: number;
   layer_snapshots: Record<string, FeatureCollection>;
   conditions: Record<string, unknown>;
 }
@@ -403,8 +401,6 @@ export interface FsSaveBody {
   timeline_selected_ms?: number | null;
   active_layers: string[];
   drawn_features: FeatureCollection;
-  phases?: Phase[];
-  current_phase?: number;
   layer_snapshots: Record<string, FeatureCollection>;
   conditions?: Record<string, unknown>;
   notes?: string;

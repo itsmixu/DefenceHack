@@ -9,7 +9,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Camera,
   Check,
   ChevronDown,
   ChevronRight,
@@ -47,7 +46,7 @@ import {
   fsSaveFile,
   fsSearch,
 } from '../api/client';
-import type { DrawnFeature, FsFileMeta, FsFolder, IpbExportV2, LayerKey, Phase } from '../api/types';
+import type { DrawnFeature, FsFileMeta, FsFolder, IpbExportV2, LayerKey } from '../api/types';
 import type { FeatureCollection, Feature } from 'geojson';
 import {
   parseBbox,
@@ -68,11 +67,6 @@ const ALL_LAYER_KEYS: LayerKey[] = [
   'opencellid', 'starlink', 'exposure', 'mcoo',
 ];
 
-const PHASE_COLORS = [
-  '#3b82f6', '#22c55e', '#ef4444',
-  '#f59e0b', '#8b5cf6', '#06b6d4',
-];
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmtRelative(iso: string): string {
@@ -91,24 +85,19 @@ function fmtFull(iso: string): string {
   return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function makeEmptyPhase(id: number): Phase {
-  return {
-    id,
-    name: `Phase ${id}`,
-    color: PHASE_COLORS[(id - 1) % PHASE_COLORS.length],
-    notes: '',
-    active_layers: [],
-    drawn_features: { type: 'FeatureCollection', features: [] },
-    layer_snapshots: {},
-    conditions: {},
-  };
-}
-
 interface ActiveFile {
   id: string;
   name: string;
-  activePhaseId: number;
-  phases: Phase[];
+}
+
+interface MapState {
+  bbox: [number, number, number, number] | null;
+  center: [number, number] | null;
+  zoom: number | null;
+  timeline_selected_ms: number | null;
+  active_layers: LayerKey[];
+  drawn_features: FeatureCollection;
+  layer_snapshots: Record<string, FeatureCollection>;
 }
 
 // ── Small shared components ────────────────────────────────────────────────────
@@ -377,7 +366,6 @@ export default function FileManagerOverlay() {
   // Save form state
   const [saveName, setSaveName]     = useState('');
   const [saveFolderId, setSaveFolderId] = useState<string | null>(null);
-  const [savePhaseCount, setSavePhaseCount] = useState(1);
 
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -408,7 +396,7 @@ export default function FileManagerOverlay() {
     qc.invalidateQueries({ queryKey: ['fs-search'] });
   }, [qc]);
 
-  const captureCurrentState = useCallback((): Partial<Phase> => {
+  const captureCurrentState = useCallback((): MapState => {
     const snapshots: Record<string, FeatureCollection> = {};
     for (const k of ALL_LAYER_KEYS) {
       const feats = featureCache[k];
@@ -419,20 +407,34 @@ export default function FileManagerOverlay() {
     let zoom: number | null = null;
     if (map) { const c = map.getCenter(); center = [c.lat, c.lng]; zoom = map.getZoom(); }
     const bboxArr = bbox ? (parseBbox(bbox) as [number, number, number, number]) : null;
-    return { bbox: bboxArr, center, zoom, timeline_selected_ms: selectedMs, active_layers: activeIds, drawn_features: drawnFeatures, layer_snapshots: snapshots };
+    return {
+      bbox: bboxArr, center, zoom,
+      timeline_selected_ms: selectedMs,
+      active_layers: activeIds,
+      drawn_features: drawnFeatures,
+      layer_snapshots: snapshots,
+    };
   }, [featureCache, activeLayers, bbox, drawnFeatures, map, selectedMs]);
 
-  const loadPhaseIntoMap = useCallback((ph: Phase) => {
+  const loadStateIntoMap = useCallback((state: {
+    bbox?: [number, number, number, number] | null;
+    center?: [number, number] | null;
+    zoom?: number | null;
+    timeline_selected_ms?: number | null;
+    active_layers?: string[];
+    drawn_features?: FeatureCollection;
+    layer_snapshots?: Record<string, FeatureCollection>;
+  }) => {
     clearAllCache();
-    if (ph.layer_snapshots && Object.keys(ph.layer_snapshots).length > 0) {
-      injectSnapshots(ph.layer_snapshots as Record<string, { features: Feature[] }>, ph.bbox ?? undefined);
+    if (state.layer_snapshots && Object.keys(state.layer_snapshots).length > 0) {
+      injectSnapshots(state.layer_snapshots as Record<string, { features: Feature[] }>, state.bbox ?? undefined);
     }
-    setActiveLayers((ph.active_layers ?? []) as LayerKey[]);
-    setAllDrawn((ph.drawn_features?.features ?? []) as DrawnFeature[]);
-    if (ph.timeline_selected_ms != null) setSelectedMs(ph.timeline_selected_ms);
+    setActiveLayers((state.active_layers ?? []) as LayerKey[]);
+    setAllDrawn((state.drawn_features?.features ?? []) as DrawnFeature[]);
+    if (state.timeline_selected_ms != null) setSelectedMs(state.timeline_selected_ms);
     if (map) {
-      if (ph.bbox) { const [w, s, e, n] = ph.bbox; map.fitBounds([[s, w], [n, e]], { animate: true, duration: 0.6 }); }
-      else if (ph.center && ph.zoom != null) { map.flyTo([ph.center[0], ph.center[1]], ph.zoom, { animate: true, duration: 0.6 }); }
+      if (state.bbox) { const [w, s, e, n] = state.bbox; map.fitBounds([[s, w], [n, e]], { animate: true, duration: 0.6 }); }
+      else if (state.center && state.zoom != null) { map.flyTo([state.center[0], state.center[1]], state.zoom, { animate: true, duration: 0.6 }); }
     }
   }, [clearAllCache, injectSnapshots, setActiveLayers, setAllDrawn, setSelectedMs, map]);
 
@@ -440,75 +442,37 @@ export default function FileManagerOverlay() {
     setOpeningId(file.id);
     try {
       const content = await fsOpenFile(file.id);
-      let phases: Phase[] = (content.phases ?? []) as Phase[];
-      if (phases.length === 0) {
-        phases = [{
-          id: 1, name: 'Phase 1', color: PHASE_COLORS[0], notes: content.notes ?? '',
-          bbox: content.bbox ?? null, center: content.center ?? null, zoom: content.zoom ?? null,
-          timeline_selected_ms: content.timeline_selected_ms ?? null,
-          active_layers: content.active_layers ?? [],
-          drawn_features: content.drawn_features ?? { type: 'FeatureCollection', features: [] },
-          layer_snapshots: (content.layer_snapshots as Record<string, FeatureCollection>) ?? {},
-          conditions: content.conditions ?? {},
-        }];
-      }
-      const activePhaseId = content.current_phase ?? phases[0]?.id ?? 1;
-      const activePhase = phases.find((p) => p.id === activePhaseId) ?? phases[0];
-      if (activePhase) loadPhaseIntoMap(activePhase);
-      setActiveFile({ id: content.id, name: content.name, activePhaseId: activePhase?.id ?? 1, phases });
+      loadStateIntoMap({
+        bbox: content.bbox ?? null,
+        center: content.center ?? null,
+        zoom: content.zoom ?? null,
+        timeline_selected_ms: content.timeline_selected_ms ?? null,
+        active_layers: content.active_layers ?? [],
+        drawn_features: content.drawn_features ?? { type: 'FeatureCollection', features: [] },
+        layer_snapshots: (content.layer_snapshots as Record<string, FeatureCollection>) ?? {},
+      });
+      setActiveFile({ id: content.id, name: content.name });
       push('success', `Opened: ${content.name}`);
     } catch (e) {
       push('error', `Failed to open: ${String(e)}`);
     } finally {
       setOpeningId(null);
     }
-  }, [loadPhaseIntoMap, push]);
-
-  const handleSwitchPhase = useCallback((newPhaseId: number) => {
-    if (!activeFile || newPhaseId === activeFile.activePhaseId) return;
-    const currentState = captureCurrentState();
-    const updatedPhases = activeFile.phases.map((p) =>
-      p.id === activeFile.activePhaseId ? { ...p, ...currentState } : p
-    );
-    const newPhase = updatedPhases.find((p) => p.id === newPhaseId);
-    if (newPhase) loadPhaseIntoMap(newPhase);
-    setActiveFile({ ...activeFile, phases: updatedPhases, activePhaseId: newPhaseId });
-  }, [activeFile, captureCurrentState, loadPhaseIntoMap]);
-
-  const handleSnapshot = useCallback(() => {
-    if (!activeFile) return;
-    const currentState = captureCurrentState();
-    const updatedPhases = activeFile.phases.map((p) =>
-      p.id === activeFile.activePhaseId ? { ...p, ...currentState } : p
-    );
-    setActiveFile({ ...activeFile, phases: updatedPhases });
-    push('info', `Phase ${activeFile.activePhaseId} captured — click Save to persist.`);
-  }, [activeFile, captureCurrentState, push]);
+  }, [loadStateIntoMap, push]);
 
   const handleSaveActiveFile = useCallback(async () => {
     if (!activeFile) return;
     setSaving(true);
     try {
-      const currentState = captureCurrentState();
-      const phases = activeFile.phases.map((p) =>
-        p.id === activeFile.activePhaseId ? { ...p, ...currentState } : p
-      );
-      const activePh = phases.find((p) => p.id === activeFile.activePhaseId) ?? phases[0];
-      const snapshots: Record<string, FeatureCollection> = {};
-      if (activePh?.layer_snapshots) {
-        for (const [k, v] of Object.entries(activePh.layer_snapshots)) snapshots[k] = v;
-      }
+      const s = captureCurrentState();
       await fsSaveFile({
         id: activeFile.id, name: activeFile.name,
-        bbox: activePh?.bbox ?? null, center: activePh?.center ?? null, zoom: activePh?.zoom ?? null,
-        timeline_selected_ms: activePh?.timeline_selected_ms ?? null,
-        active_layers: activePh?.active_layers ?? [],
-        drawn_features: activePh?.drawn_features ?? { type: 'FeatureCollection', features: [] },
-        layer_snapshots: snapshots,
-        phases: phases as Phase[],
-        current_phase: activeFile.activePhaseId,
+        bbox: s.bbox, center: s.center, zoom: s.zoom,
+        timeline_selected_ms: s.timeline_selected_ms,
+        active_layers: s.active_layers,
+        drawn_features: s.drawn_features,
+        layer_snapshots: s.layer_snapshots,
       });
-      setActiveFile({ ...activeFile, phases });
       push('success', `Saved: ${activeFile.name}`);
       refetchAll();
     } catch (e) {
@@ -522,36 +486,26 @@ export default function FileManagerOverlay() {
     const name = saveName.trim() || `Mission ${new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
     setSaving(true);
     try {
-      const currentState = captureCurrentState();
-      const phase1: Phase = {
-        id: 1, name: 'Phase 1', color: PHASE_COLORS[0], notes: '',
-        ...currentState,
-        drawn_features: (currentState.drawn_features as FeatureCollection) ?? { type: 'FeatureCollection', features: [] },
-        active_layers: (currentState.active_layers as string[]) ?? [],
-      };
-      const phases: Phase[] = [phase1, ...Array.from({ length: savePhaseCount - 1 }, (_, i) => makeEmptyPhase(i + 2))];
-      const snapshots: Record<string, FeatureCollection> = (phase1.layer_snapshots as Record<string, FeatureCollection>) ?? {};
+      const s = captureCurrentState();
       const meta = await fsSaveFile({
         name, folder_id: saveFolderId,
-        bbox: phase1.bbox ?? null, center: phase1.center ?? null, zoom: phase1.zoom ?? null,
-        timeline_selected_ms: phase1.timeline_selected_ms ?? null,
-        active_layers: phase1.active_layers,
-        drawn_features: phase1.drawn_features,
-        layer_snapshots: snapshots,
-        phases, current_phase: 1,
+        bbox: s.bbox, center: s.center, zoom: s.zoom,
+        timeline_selected_ms: s.timeline_selected_ms,
+        active_layers: s.active_layers,
+        drawn_features: s.drawn_features,
+        layer_snapshots: s.layer_snapshots,
       });
       setView('browser');
       setSaveName('');
-      setSavePhaseCount(1);
-      setActiveFile({ id: meta.id, name: meta.name, activePhaseId: 1, phases });
-      push('success', `Saved: ${name}${savePhaseCount > 1 ? ` (${savePhaseCount} phases)` : ''}`);
+      setActiveFile({ id: meta.id, name: meta.name });
+      push('success', `Saved: ${name}`);
       refetchAll();
     } catch (e) {
       push('error', `Save failed: ${String(e)}`);
     } finally {
       setSaving(false);
     }
-  }, [saveName, saveFolderId, savePhaseCount, captureCurrentState, push, refetchAll]);
+  }, [saveName, saveFolderId, captureCurrentState, push, refetchAll]);
 
   const handleExport = useCallback(async (id: string, name: string) => {
     try { await fsExportDownload(id, name); push('success', `Exported: ${name}.ipb.json`); }
@@ -645,7 +599,6 @@ export default function FileManagerOverlay() {
   }
 
   const isSearching = searchQuery.length >= 2;
-  const activePhase = activeFile?.phases.find((p) => p.id === activeFile.activePhaseId);
 
   return (
     <div className="pointer-events-auto absolute left-3 top-[76px] z-[900] flex flex-col gap-0" style={{ width: 300 }}>
@@ -673,14 +626,6 @@ export default function FileManagerOverlay() {
               <span className="truncate font-mono text-[11px] font-semibold text-white" title={activeFile.name}>
                 {activeFile.name}
               </span>
-              {activePhase && (
-                <span
-                  className="shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.08em]"
-                  style={{ background: (activePhase.color ?? '#3b82f6') + '25', color: activePhase.color ?? '#3b82f6', border: `1px solid ${activePhase.color ?? '#3b82f6'}50` }}
-                >
-                  {activePhase.name}
-                </span>
-              )}
             </div>
           ) : (
             <span className="font-mono text-[10px] text-white/25">No file open</span>
@@ -690,13 +635,6 @@ export default function FileManagerOverlay() {
         {/* Quick actions when a file is open */}
         {activeFile && (
           <div className="flex items-center pr-1">
-            <button
-              onClick={handleSnapshot}
-              title="Snapshot current phase"
-              className="rounded-sm p-1 text-white/35 hover:bg-white/[0.06] hover:text-white"
-            >
-              <Camera size={12} />
-            </button>
             <button
               onClick={handleSaveActiveFile}
               disabled={saving}
@@ -732,35 +670,6 @@ export default function FileManagerOverlay() {
           {open ? <ChevronLeft size={13} /> : <ChevronDown size={13} />}
         </button>
       </div>
-
-      {/* ── Phase switcher (below header, when file is open) ────────────── */}
-      {activeFile && activeFile.phases.length > 1 && (
-        <div
-          className="border-x border-b px-2 py-2 shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-          style={{ background: '#0e0e0e', borderColor: open ? '#fff' : '#393939' }}
-        >
-          <div className="flex flex-wrap gap-1">
-            {activeFile.phases.map((ph) => {
-              const isActive = ph.id === activeFile.activePhaseId;
-              return (
-                <button
-                  key={ph.id}
-                  onClick={() => handleSwitchPhase(ph.id)}
-                  className="rounded-sm border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition"
-                  style={{
-                    borderColor: isActive ? ph.color ?? '#3b82f6' : '#393939',
-                    background: isActive ? (ph.color ?? '#3b82f6') + '20' : 'transparent',
-                    color: isActive ? ph.color ?? '#3b82f6' : 'rgba(255,255,255,0.40)',
-                    fontWeight: isActive ? 700 : 400,
-                  }}
-                >
-                  {ph.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* ── Expanded panel ──────────────────────────────────────────────── */}
       {open && (
@@ -838,29 +747,6 @@ export default function FileManagerOverlay() {
                   </select>
                 </div>
               )}
-
-              <div>
-                <label className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-white/40">
-                  Phases
-                </label>
-                <div className="flex gap-1.5">
-                  {[1, 2, 3, 4, 5, 6].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setSavePhaseCount(n)}
-                      className="h-8 flex-1 rounded-sm border font-mono text-[11px] font-semibold transition"
-                      style={{
-                        borderColor: savePhaseCount === n ? '#fff' : '#393939',
-                        background: savePhaseCount === n ? '#fff' : '#1a1a1a',
-                        color: savePhaseCount === n ? '#131313' : 'rgba(255,255,255,0.50)',
-                      }}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               <button
                 onClick={handleSaveNew}
