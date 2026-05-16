@@ -38,10 +38,10 @@ CATEGORIES: dict[int, str] = {
 
 
 def _search_radius_deg(bbox: BBox) -> int:
-    """Angular radius (degrees) that covers the bbox from its centre, capped at 30°."""
+    """Angular radius (degrees) that covers bbox from centre, with practical floor."""
     lat_half = (bbox.max_lat - bbox.min_lat) / 2
     lon_half = (bbox.max_lon - bbox.min_lon) / 2
-    return max(1, min(30, math.ceil(math.sqrt(lat_half ** 2 + lon_half ** 2))))
+    return max(8, min(30, math.ceil(math.sqrt(lat_half ** 2 + lon_half ** 2))))
 
 
 def _center(bbox: BBox) -> tuple[float, float]:
@@ -56,17 +56,27 @@ async def _fetch_above(
     radius: int,
     category_id: int,
     category_label: str,
-) -> list[dict]:
+) -> tuple[list[dict], str | None]:
     url = f"{API_BASE}/above/{lat}/{lon}/0/{radius}/{category_id}/&apiKey={api_key}"
     try:
         resp = await client.get(url, timeout=20.0,
                                 headers={"User-Agent": "DefenceHack-IPB/0.1"})
         resp.raise_for_status()
         payload = resp.json()
+    except httpx.HTTPStatusError as e:
+        detail = ""
+        try:
+            detail = e.response.text[:160]
+        except Exception:
+            pass
+        return [], f"{category_label}: HTTP {e.response.status_code} {detail}".strip()
     except httpx.HTTPError as e:
-        return []
+        return [], f"{category_label}: upstream error: {e}"
     except ValueError:
-        return []
+        return [], f"{category_label}: invalid JSON from upstream"
+
+    if isinstance(payload, dict) and payload.get("error"):
+        return [], f"{category_label}: {payload.get('error')}"
 
     features: list[dict] = []
     for sat in payload.get("above") or []:
@@ -87,7 +97,7 @@ async def _fetch_above(
                 "altitude_km": sat.get("satalt"),
             },
         })
-    return features
+    return features, None
 
 
 class N2YOProvider(Provider):
@@ -103,11 +113,14 @@ class N2YOProvider(Provider):
                 bbox=bbox.as_list(), t=t,
             )
 
+        lat, lon = _center(bbox)
+        radius = _search_radius_deg(bbox)
+
         # Cache key uses a 5-minute bucket so rapid re-requests share results
         # without hammering N2YO's transaction quota.
         now = datetime.now(timezone.utc)
         bucket = now.strftime("%Y%m%d%H") + str(now.minute // 5)
-        cache_key = {"bbox": bbox.as_list(), "bucket": bucket}
+        cache_key = {"bbox": bbox.as_list(), "radius": radius, "bucket": bucket}
 
         cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
         if cached is not None:
@@ -120,9 +133,6 @@ class N2YOProvider(Provider):
                 ),
             )
 
-        lat, lon = _center(bbox)
-        radius = _search_radius_deg(bbox)
-
         async with httpx.AsyncClient() as client:
             tasks = [
                 _fetch_above(client, api_key, lat, lon, radius, cat_id, cat_label)
@@ -130,19 +140,37 @@ class N2YOProvider(Provider):
             ]
             results = await asyncio.gather(*tasks)
 
+        errors = [err for _, err in results if err]
+
         # Deduplicate by satid in case a satellite appears in multiple categories.
         seen: set[int] = set()
         features: list[dict] = []
-        for group in results:
+        for group, _ in results:
             for f in group:
                 sid = f["properties"].get("satid")
                 if sid not in seen:
                     seen.add(sid)
                     features.append(f)
 
+        if errors and not features:
+            reason = "; ".join(errors[:2])
+            self.mark("unavailable", reason)
+            return empty_collection(
+                self.id,
+                status="unavailable",
+                reason=reason,
+                bbox=bbox.as_list(),
+                t=t,
+            )
+
         cache.write(self.id, cache_key, {"features": features})
-        status = "ok" if features else "partial"
-        reason = f"{len(features)} satellites overhead" if features else "no satellites above bbox"
+        status = "ok" if features and not errors else "partial"
+        if features:
+            reason = f"{len(features)} satellites within {radius}°"
+            if errors:
+                reason += f"; degraded ({'; '.join(errors[:1])})"
+        else:
+            reason = f"no satellites within {radius}°"
         self.mark(status, reason)
         return FeatureCollection(
             features=features,
