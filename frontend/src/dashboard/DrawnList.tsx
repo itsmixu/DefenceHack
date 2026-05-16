@@ -1,32 +1,50 @@
+import { MoveUpRight, Trash2 } from 'lucide-react';
 import { useDrawnStore } from '../store';
 
-const colorByType: Record<string, string> = {
-  AOI: 'border border-white/35 bg-white/10 text-white',
-  NAI: 'border border-cyan-300/40 bg-cyan-500/10 text-cyan-100',
-  TAI: 'border border-red-300/40 bg-red-500/10 text-red-100',
-  DP: 'border border-violet-300/40 bg-violet-500/10 text-violet-100',
-  annotation: 'border border-white/20 bg-white/5 text-white/80',
+const STYLE_BY_TYPE: Record<string, string> = {
+  AOI:          'border border-white/35 bg-white/10 text-white',
+  NAI:          'border border-cyan-300/40 bg-cyan-500/10 text-cyan-100',
+  TAI:          'border border-red-300/40 bg-red-500/10 text-red-100',
+  DP:           'border border-violet-300/40 bg-violet-500/10 text-violet-100',
+  PHASE_LINE:   'border border-emerald-300/40 bg-emerald-500/10 text-emerald-100',
+  BOUNDARY:     'border border-amber-300/40 bg-amber-500/10 text-amber-100',
+  ROUTE:        'border border-purple-300/40 bg-purple-500/10 text-purple-100',
+  OBJECTIVE:    'border border-red-300/40 bg-red-500/10 text-red-100',
+  UNIT_FRIENDLY:'border border-blue-300/40 bg-blue-500/10 text-blue-100',
+  UNIT_ENEMY:   'border border-red-300/40 bg-red-500/10 text-red-100',
+  CHOKE_POINT:  'border border-amber-300/40 bg-amber-500/10 text-amber-100',
+  HIDE_SITE:    'border border-emerald-300/40 bg-emerald-500/10 text-emerald-100',
+  annotation:   'border border-white/20 bg-white/5 text-white/80',
+};
+
+const GEO_LABEL: Record<string, string> = {
+  Polygon:    'polygon',
+  LineString: 'line',
+  Point:      'point',
 };
 
 export default function DrawnList() {
-  const features = useDrawnStore((s) => s.features);
-  const clear = useDrawnStore((s) => s.clear);
+  const features    = useDrawnStore((s) => s.features);
+  const clear       = useDrawnStore((s) => s.clear);
+  const removeFeature = useDrawnStore((s) => s.removeFeature);
 
   if (!features.length) {
     return (
       <div>
         <p className="text-xs text-white/65">
-          No drawn features yet. Use the toolbar at the top-left of the map to
-          draw an <strong>AOI</strong>, <strong>NAI</strong>,{' '}
-          <strong>TAI</strong>, <strong>DP</strong>, or annotation.
+          No drawn features yet. Use the <strong>Tools</strong> tab to draw
+          arrows, or the map toolbar (top-left) to draw areas and lines.
         </p>
       </div>
     );
   }
 
+  const arrows = features.filter((f) => f.properties?.feature_type === 'ARROW');
+  const shapes  = features.filter((f) => f.properties?.feature_type !== 'ARROW');
+
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
         <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
           {features.length} drawn feature{features.length === 1 ? '' : 's'}
         </p>
@@ -34,34 +52,104 @@ export default function DrawnList() {
           onClick={() => clear()}
           className="text-[10px] uppercase tracking-[0.06em] text-white/50 hover:text-red-300"
         >
-          Clear store
+          Clear all
         </button>
       </div>
-      <ul className="space-y-2">
-        {features.map((f) => {
-          const ft = String(
-            (f.properties as { feature_type?: string } | null)?.feature_type ??
-              'annotation',
-          );
-          return (
-            <li
-              key={String(f.id)}
-              className="rounded border border-white/10 bg-black/30 p-2 text-xs"
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${
-                    colorByType[ft] ?? colorByType.annotation
-                  }`}
+
+      {/* Arrows section */}
+      {arrows.length > 0 && (
+        <section>
+          <p className="mb-1.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">
+            <MoveUpRight size={9} />
+            Arrows ({arrows.length})
+          </p>
+          <ul className="space-y-1">
+            {arrows.map((f) => {
+              const p = f.properties as {
+                color?: string; size?: number; weight?: number;
+              };
+              const color  = p.color  ?? '#ef4444';
+              const size   = p.size   ?? 3;
+              const weight = p.weight ?? 3;
+              const sizes  = ['XS', 'S', 'M', 'L', 'XL'];
+              const sizeLabel = sizes[Math.min(size - 1, sizes.length - 1)];
+
+              return (
+                <li
+                  key={String(f.id)}
+                  className="flex items-center gap-2 rounded border border-white/10 bg-black/30 px-2 py-1.5"
                 >
-                  {ft}
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">{f.geometry?.type}</span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                  {/* Arrow preview */}
+                  <svg width="36" height="14" style={{ flexShrink: 0, overflow: 'visible' }}>
+                    <defs>
+                      <marker id={`ah-${f.id}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                        <path d="M0,0 L0,6 L6,3 z" fill={color} />
+                      </marker>
+                    </defs>
+                    <line x1="2" y1="7" x2="28" y2="7"
+                      stroke={color}
+                      strokeWidth={Math.max(1, weight * 0.7)}
+                      markerEnd={`url(#ah-${f.id})`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono text-[10px] font-semibold text-white/85">Arrow</div>
+                    <div className="font-mono text-[9px] text-white/40">
+                      size {sizeLabel}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => removeFeature(String(f.id))}
+                    title="Delete arrow"
+                    className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* Shapes section */}
+      {shapes.length > 0 && (
+        <section>
+          {arrows.length > 0 && (
+            <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">
+              Shapes ({shapes.length})
+            </p>
+          )}
+          <ul className="space-y-1">
+            {shapes.map((f) => {
+              const ft = String(f.properties?.feature_type ?? 'annotation');
+              const geoType = f.geometry?.type ?? '';
+              return (
+                <li
+                  key={String(f.id)}
+                  className="rounded border border-white/10 bg-black/30 p-2 text-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${
+                        STYLE_BY_TYPE[ft] ?? STYLE_BY_TYPE.annotation
+                      }`}
+                    >
+                      {ft === 'annotation' ? 'Note' : ft.replace(/_/g, ' ')}
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.04em] text-white/45">
+                      {GEO_LABEL[geoType] ?? geoType}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

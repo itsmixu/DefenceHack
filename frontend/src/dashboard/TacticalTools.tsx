@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Crosshair, MousePointer, ChevronDown, ChevronUp, Wind, RefreshCw } from 'lucide-react';
+import { Crosshair, MousePointer, ChevronDown, ChevronUp, Wind, RefreshCw, MoveUpRight } from 'lucide-react';
 import { MILITARY_FEATURE_TYPES, useTacticalStore, useBboxStore } from '../store';
 import type { MilitaryFeatureType } from '../store';
 import { getDroneConditions } from '../api/client';
@@ -152,6 +152,135 @@ function DroneConditionsPanel() {
   );
 }
 
+// ── Arrow colours ──────────────────────────────────────────────────────────────
+const ARROW_COLORS = [
+  { color: '#ef4444', label: 'Red'    },
+  { color: '#3b82f6', label: 'Blue'   },
+  { color: '#22c55e', label: 'Green'  },
+  { color: '#f59e0b', label: 'Amber'  },
+  { color: '#ffffff', label: 'White'  },
+  { color: '#a855f7', label: 'Purple' },
+  { color: '#f97316', label: 'Orange' },
+];
+
+const ARROW_SIZES = ['XS', 'S', 'M', 'L', 'XL'];
+
+function ArrowPanel() {
+  const isArrowMode  = useTacticalStore((s) => s.isArrowMode);
+  const arrowColor   = useTacticalStore((s) => s.arrowColor);
+  const arrowSize    = useTacticalStore((s) => s.arrowSize);
+  const setArrowMode  = useTacticalStore((s) => s.setArrowMode);
+  const setArrowColor = useTacticalStore((s) => s.setArrowColor);
+  const setArrowSize  = useTacticalStore((s) => s.setArrowSize);
+
+  return (
+    <div className="rounded border border-white/10 bg-black/25 p-2.5 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <MoveUpRight size={11} className="text-white/60" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-white/70">
+            Arrows
+          </span>
+        </div>
+        <button
+          onClick={() => setArrowMode(!isArrowMode)}
+          style={isArrowMode ? { borderColor: arrowColor, backgroundColor: `${arrowColor}20`, color: arrowColor } : {}}
+          className={`rounded border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition ${
+            isArrowMode
+              ? 'font-semibold'
+              : 'border-white/20 text-white/55 hover:border-white/40 hover:text-white/80'
+          }`}
+        >
+          {isArrowMode ? '● Drawing…' : 'Draw Arrow'}
+        </button>
+      </div>
+
+      {isArrowMode && (
+        <p className="text-[9px] text-amber-200/70 leading-relaxed">
+          Click &amp; drag on the map to place an arrow. Press <kbd className="rounded bg-white/10 px-1">Esc</kbd> to stop.
+        </p>
+      )}
+
+      {/* Color swatches */}
+      <div>
+        <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">Colour</p>
+        <div className="flex flex-wrap gap-1.5">
+          {ARROW_COLORS.map(({ color, label }) => (
+            <button
+              key={color}
+              title={label}
+              onClick={() => setArrowColor(color)}
+              className="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
+              style={{
+                backgroundColor: color,
+                borderColor: arrowColor === color ? '#fff' : 'transparent',
+                outline: arrowColor === color ? `2px solid ${color}` : 'none',
+                outlineOffset: '2px',
+              }}
+            />
+          ))}
+          {/* Custom colour input */}
+          <label title="Custom colour" className="relative flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border-2 border-white/20 bg-white/5 text-[8px] text-white/50 hover:border-white/40 hover:text-white/80">
+            +
+            <input
+              type="color"
+              value={arrowColor}
+              onChange={(e) => setArrowColor(e.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Size selector */}
+      <div>
+        <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.06em] text-white/35">Size</p>
+        <div className="flex gap-1">
+          {ARROW_SIZES.map((label, i) => {
+            const size = i + 1;
+            return (
+              <button
+                key={size}
+                onClick={() => setArrowSize(size)}
+                style={arrowSize === size ? { borderColor: arrowColor, color: arrowColor, backgroundColor: `${arrowColor}15` } : {}}
+                className={`flex-1 rounded border py-0.5 font-mono text-[9px] transition ${
+                  arrowSize === size
+                    ? 'font-semibold'
+                    : 'border-white/15 text-white/45 hover:border-white/30 hover:text-white/70'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Visual preview */}
+        <svg className="mt-2 w-full" height="20" style={{ overflow: 'visible' }}>
+          <defs>
+            <marker
+              id="arrow-prev"
+              markerWidth="8" markerHeight="8"
+              refX="6" refY="3"
+              orient="auto"
+            >
+              <path d="M0,0 L0,6 L8,3 z" fill={arrowColor} />
+            </marker>
+          </defs>
+          <line
+            x1="8" y1="10"
+            x2="88%" y2="10"
+            stroke={arrowColor}
+            strokeWidth={Math.max(1, (arrowSize - 1) * 1.3 + 1)}
+            markerEnd="url(#arrow-prev)"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // ── Tactical drawing palette ───────────────────────────────────────────────────
 export default function TacticalTools() {
   const setPending = useTacticalStore((s) => s.setPending);
@@ -161,6 +290,9 @@ export default function TacticalTools() {
     <div className="space-y-3">
       {/* UAS drone conditions analysis */}
       <DroneConditionsPanel />
+
+      {/* Arrow drawing tool */}
+      <ArrowPanel />
 
       {/* Drawing instructions / active indicator */}
       <div className="flex items-start gap-2 rounded border border-white/10 bg-white/[0.03] px-3 py-2">
