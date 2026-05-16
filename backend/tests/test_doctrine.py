@@ -37,6 +37,19 @@ def test_swamp_cites_b2_or_b8():
     assert "B-2" in info["cite"] or "B-8" in info["cite"]
 
 
+def test_english_mml_aliases_match_expected_classes():
+    expected = {
+        "lake": "no-go",
+        "river": "no-go",
+        "sea": "no-go",
+        "swamp": "slow-go",
+        "bedrock": "slow-go",
+    }
+    for code, klass in expected.items():
+        info = doctrine.classify_terrain(code)
+        assert info["class"] == klass, code
+
+
 def test_open_farmland_is_go():
     info = doctrine.classify_terrain("farmland")
     assert info["class"] == "go"

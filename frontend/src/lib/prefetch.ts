@@ -41,6 +41,7 @@ const isBackendUnavailableError = (err: unknown): boolean => {
 export async function prefetchBbox(
   qc: QueryClient,
   bbox: Bbox4,
+  t?: string,
 ): Promise<PrefetchResult[]> {
   // Expand the requested bbox a bit so that small differences between the
   // saved zone bounds and the user's actual viewport (after flyTo) still
@@ -52,8 +53,8 @@ export async function prefetchBbox(
   const tasks = PREFETCH_LAYERS.map(async (layer): Promise<PrefetchResult> => {
     try {
       const data = await qc.fetchQuery({
-        queryKey: ['layer', layer, bboxStr],
-        queryFn: () => getLayer(layer, { bbox: bboxStr }),
+        queryKey: ['layer', layer, bboxStr, t ?? 'now'],
+        queryFn: () => getLayer(layer, { bbox: bboxStr, t }),
       });
       const features = data.features ?? [];
       addBatch(layer, fetched, features);

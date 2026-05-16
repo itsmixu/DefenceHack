@@ -139,3 +139,40 @@ def test_unknown_vehicle_class_defaults_to_wheeled(stubs):
     fc = asyncio.run(build_mobility(BBOX, None, "unicorn"))
     for f in fc.features:
         assert f["properties"]["vehicle_class"] == "wheeled"
+
+
+def test_flood_zone_overrides_overlapping_terrain(monkeypatch):
+    providers = {
+        "mml": _Stub("mml", [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[24.1, 60.1], [24.4, 60.1], [24.4, 60.4], [24.1, 60.4], [24.1, 60.1]]],
+                },
+                "properties": {"terrain_type": "farmland"},
+            },
+        ]),
+        "digiroad": _Stub("digiroad", []),
+        "syke": _Stub("syke", [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[24.2, 60.2], [24.5, 60.2], [24.5, 60.5], [24.2, 60.5], [24.2, 60.2]]],
+                },
+                "properties": {"category": "flood_risk"},
+            },
+        ]),
+        "exposure": _Stub("exposure", []),
+    }
+    monkeypatch.setattr(mob_module, "PROVIDERS", providers)
+
+    fc = asyncio.run(build_mobility(BBOX, None, "wheeled"))
+    terrain = [
+        f for f in fc.features
+        if (f.get("properties") or {}).get("terrain_type") == "farmland"
+    ]
+    assert terrain
+    assert terrain[0]["properties"]["mcoo_class"] == "no-go"
+    assert terrain[0]["properties"]["speed_kmh"] == 0.0

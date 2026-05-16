@@ -13,6 +13,7 @@ import {
   useFeatureCacheStore,
   useLayerStore,
   useOsmPoiFilterStore,
+  useTimelineStore,
 } from '../store';
 import { getStyleForLayer } from './layerStyles';
 
@@ -40,6 +41,8 @@ export default function SourceLayer({ layer }: Props) {
   const cachedFeatures = useFeatureCacheStore((s) => s.features[layer]);
   const coveredList = useFeatureCacheStore((s) => s.covered[layer]);
   const osmEnabled = useOsmPoiFilterStore((s) => s.enabled);
+  const selectedMs = useTimelineStore((s) => s.selectedMs);
+  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
 
   // Decide whether the current viewport is already covered by a previously
   // fetched bbox. If so, skip the network request and just render the cache.
@@ -55,11 +58,11 @@ export default function SourceLayer({ layer }: Props) {
   }, [bbox, coveredList]);
 
   const query = useQuery({
-    queryKey: ['layer', layer, fetchBboxStr],
+    queryKey: ['layer', layer, fetchBboxStr, selectedIso],
     enabled: needsFetch && !!fetchBboxStr,
     queryFn: () => {
       if (!fetchBboxStr) throw new Error('no bbox');
-      return getLayer(layer, { bbox: fetchBboxStr });
+      return getLayer(layer, { bbox: fetchBboxStr, t: selectedIso });
     },
   });
 

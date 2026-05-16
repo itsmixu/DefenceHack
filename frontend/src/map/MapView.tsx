@@ -13,6 +13,7 @@ import {
   useFeatureCacheStore,
   useLayerStore,
   useMapStore,
+  useTimelineStore,
 } from '../store';
 import type { LayerKey } from '../api/types';
 
@@ -60,7 +61,26 @@ export default function MapView() {
   const backendReason = useBackendStatusStore((s) => s.reason);
 
   const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
+  const rangeStartMs = useTimelineStore((s) => s.rangeStartMs);
+  const rangeEndMs = useTimelineStore((s) => s.rangeEndMs);
+  const stepMinutes = useTimelineStore((s) => s.stepMinutes);
+  const selectedMs = useTimelineStore((s) => s.selectedMs);
+  const setSelectedMs = useTimelineStore((s) => s.setSelectedMs);
   const queryClient = useQueryClient();
+
+  const stepMs = stepMinutes * 60 * 1000;
+  const sliderSteps = Math.max(1, Math.round((rangeEndMs - rangeStartMs) / stepMs));
+  const sliderValue = Math.min(sliderSteps, Math.max(0, Math.round((selectedMs - rangeStartMs) / stepMs)));
+  const selectedIso = useMemo(() => new Date(selectedMs).toISOString(), [selectedMs]);
+  const selectedLocal = useMemo(
+    () => new Date(selectedMs).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
+    [selectedMs],
+  );
+
+  useEffect(() => {
+    clearAllFeatures();
+    queryClient.invalidateQueries({ queryKey: ['layer'] });
+  }, [selectedMs, clearAllFeatures, queryClient]);
 
   const loadingLayers = useMemo(
     () => ALL_LAYERS.filter((id) => active[id] && loading[id]),
@@ -209,6 +229,35 @@ export default function MapView() {
               </div>
             );
           })}
+      </div>
+
+      <div className="pointer-events-auto absolute bottom-3 left-1/2 z-[1000] w-[min(760px,calc(100%-2rem))] -translate-x-1/2 rounded border border-white/15 bg-black/90 px-4 py-3 text-white shadow-[0_10px_28px_rgba(0,0,0,0.5)] backdrop-blur-sm">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/65">Timeline</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-white/80">
+            {selectedLocal} · {selectedIso}
+          </span>
+        </div>
+
+        <input
+          type="range"
+          min={0}
+          max={sliderSteps}
+          step={1}
+          value={sliderValue}
+          onChange={(e) => {
+            const idx = Number(e.target.value);
+            setSelectedMs(rangeStartMs + idx * stepMs);
+          }}
+          className="w-full accent-white"
+          aria-label="Operational timeline"
+        />
+
+        <div className="mt-2 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
+          <span>{new Date(rangeStartMs).toISOString()}</span>
+          <span>step {stepMinutes}m</span>
+          <span>{new Date(rangeEndMs).toISOString()}</span>
+        </div>
       </div>
     </div>
   );

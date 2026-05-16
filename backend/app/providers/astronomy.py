@@ -59,10 +59,18 @@ def _night_ops_rating(illumination_pct: float) -> str:
 
 def _compute_day(observer, tz_str: str, date: Any) -> dict[str, Any]:
     """Return all astronomical properties for a single calendar date."""
-    from astral.sun import sun
+    from astral.sun import dawn, dusk, sun
     from astral import moon
 
     s = sun(observer, date=date, tzinfo=tz_str)
+    try:
+        nautical_dawn = dawn(observer, date=date, tzinfo=tz_str, depression=12)
+    except ValueError:
+        nautical_dawn = None
+    try:
+        nautical_dusk = dusk(observer, date=date, tzinfo=tz_str, depression=12)
+    except ValueError:
+        nautical_dusk = None
     phase = moon.phase(date)
     illumination = _moon_illumination_pct(phase)
     daylight_sec = (s["sunset"] - s["sunrise"]).total_seconds()
@@ -74,6 +82,8 @@ def _compute_day(observer, tz_str: str, date: Any) -> dict[str, Any]:
         "sunset": s["sunset"].isoformat(),
         "civil_dawn": s["dawn"].isoformat(),
         "civil_dusk": s["dusk"].isoformat(),
+        "nautical_dawn": nautical_dawn.isoformat() if nautical_dawn else None,
+        "nautical_dusk": nautical_dusk.isoformat() if nautical_dusk else None,
         "noon": s["noon"].isoformat(),
         "daylight_hours": round(daylight_sec / 3600.0, 1),
         "darkness_hours": darkness_hours,
@@ -131,6 +141,10 @@ class AstronomyProvider(Provider):
                         "source": "astronomy",
                         "date": day_dt.date().isoformat(),
                         "error": str(exc),
+                        "civil_dawn": None,
+                        "civil_dusk": None,
+                        "nautical_dawn": None,
+                        "nautical_dusk": None,
                         "darkness_hours": 0,
                         "moon_illumination_pct": None,
                         "night_ops_rating": "unknown",

@@ -1,9 +1,90 @@
+
+
 # AGENTS.md — DefenceHack / 61N IPB Tool
 
 > **Read this file first.** It is the single source of truth for any AI coding
 > agent (Cascade, Claude Code, Cursor, Copilot, etc.) or human contributor
 > working on this repository. If you change architecture, update this file in
 > the same commit.
+
+---
+
+## 0. AI agent roles (read this before §1)
+
+Two AI agents run simultaneously on the **frontend** side of this repo.
+Each agent has a strict ownership boundary. Violating it causes merge
+conflicts. Do not touch files outside your zone without an explicit
+human instruction.
+
+### Windsurf (Cascade) — Map zone
+
+**Owns:** `frontend/src/map/`, `frontend/src/drawing/`
+
+**Primary tasks:**
+- `MapView.tsx` — Leaflet container, zoom/pan, basemap switching
+- `frontend/src/map/layers/` — one component per data layer (roads,
+  weather, population, cell towers, satellite, exposure, MCOO overlay)
+- `frontend/src/drawing/` — geoman setup, drawn-feature store, feature
+  type styling (`AOI`, `NAI`, `TAI`, `DP`, `annotation`)
+- Basemap configs (`basemaps.ts`) and MML WMTS tile integration
+- Layer toggle panel (the UI control that turns layers on/off)
+
+**Do NOT touch:**
+- `frontend/src/dashboard/` — that is Claude Code's zone
+- `backend/` — ever, unless human says so
+
+---
+
+### Claude Code — Dashboard zone
+
+**Owns:** `frontend/src/dashboard/`, `frontend/src/api/`
+
+**Primary tasks:**
+- `frontend/src/dashboard/` — side panel, all stat widgets, weather
+  summary card, satellite overpass schedule, source-status panel,
+  terrain-effects briefing card, plans/operations history view
+- `frontend/src/api/` — typed `fetch` clients for every backend
+  endpoint (layers, `/api/sources`, `/api/plans`, `/api/operations`,
+  `/api/analyze/*`)
+- Time/date picker and AOI search bar (they feed data into the
+  dashboard, not the map)
+- Any cross-cutting state (Zustand store if added) lives in
+  `frontend/src/lib/` — coordinate with Windsurf before adding
+
+**Do NOT touch:**
+- `frontend/src/map/` — that is Windsurf's zone
+- `frontend/src/drawing/` — that is Windsurf's zone
+- `backend/` — ever, unless human says so
+
+---
+
+### Shared / neutral files
+
+Both agents may read but must **coordinate before writing**:
+
+| File | Who writes | Rule |
+|---|---|---|
+| `frontend/src/App.tsx` | Either | Discuss first; keep changes minimal |
+| `frontend/src/main.tsx` | Either | Rarely needs touching |
+| `frontend/src/lib/` | Either | Add utils freely; do not rename existing exports |
+| `frontend/package.json` | Either | Add deps in separate commits, note why |
+| `AGENTS.md` | Either | Update in same commit as the change it documents |
+
+---
+
+### Handshake: how the two zones talk
+
+The map and dashboard are decoupled through **shared state only** —
+no direct component imports across the zone boundary.
+
+- Windsurf fires events / updates a Zustand slice (e.g. `mapSlice`)
+  when the visible bbox changes or a drawing is completed.
+- Claude Code reads from that slice in the dashboard; it never imports
+  a component from `map/` or `drawing/`.
+- Conversely, Windsurf reads from `dashboardSlice` (e.g. active layers,
+  selected time) but never imports from `dashboard/`.
+- The `api/` clients (Claude Code's zone) are imported by both sides —
+  that is intentional and fine.
 
 ---
 
@@ -128,14 +209,14 @@ DefenceHack/
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx
-│       ├── api/               # typed clients for backend endpoints
-│       ├── map/
+│       ├── api/               # typed clients for backend endpoints  [Claude Code]
+│       ├── map/               # [Windsurf]
 │       │   ├── MapView.tsx    # main Leaflet container
 │       │   ├── basemaps.ts    # OSM, MML WMTS configs
 │       │   └── layers/        # one component per layer type
-│       ├── drawing/           # geoman setup, drawn-features store
-│       ├── dashboard/         # side panel, stats widgets
-│       └── lib/               # shared utils (bbox, geojson helpers)
+│       ├── drawing/           # geoman setup, drawn-features store   [Windsurf]
+│       ├── dashboard/         # side panel, stats widgets            [Claude Code]
+│       └── lib/               # shared utils (bbox, geojson helpers) [both]
 │
 └── data/                      # gitignored cached / downloaded data
     ├── README.md
@@ -394,8 +475,9 @@ npm run dev                            # http://localhost:5173
 
 ## 9. Rules for AI agents working on this repo
 
-- **Stay in your folder.** Frontend agents do not edit `backend/`, and vice
-  versa, unless the user explicitly says so.
+- **Stay in your zone.** See §0 for the exact file boundaries.
+  Frontend agents do not edit `backend/`, and vice versa, unless the
+  user explicitly says so.
 - **Honour the GeoJSON-EPSG:4326 contract.** Do not invent new response
   shapes. If a new endpoint is needed, document it in §6 of this file in the
   same change.

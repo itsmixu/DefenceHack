@@ -108,7 +108,7 @@ async def build_drone_conditions(bbox: BBox, t: datetime | None) -> dict[str, An
             "gust_ms": _float(fc.get("WindGust")),
             "temp_c": _float(fc.get("Temperature")),
             "visibility_m": _float(fc.get("Visibility")),
-            "ceiling_m": _float(fc.get("CloudBase1")),
+            "ceiling_m": _float(fc.get("CloudBase") if fc.get("CloudBase") is not None else fc.get("CloudBase1")),
             "cloud_cover_pct": _float(fc.get("TotalCloudCover")),
             "precip_mmh": _float(fc.get("PrecipitationAmount")),
         })

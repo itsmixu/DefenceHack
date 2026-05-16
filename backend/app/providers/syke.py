@@ -28,8 +28,8 @@ gracefully and return empty collections with status "unavailable".
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from typing import Any
-from xml.etree import ElementTree as ET
 
 import httpx
 
@@ -38,18 +38,19 @@ from ..bbox import BBox
 from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
-WFS_URL = "https://paikkatieto.ymparisto.fi/geoserver/ows"
 CACHE_TTL_SECONDS = 7 * 24 * 60 * 60  # 1 week — flood zones change rarely
 
-# (layer_name, category, mcoo_implication)
-LAYERS: tuple[tuple[str, str, str], ...] = (
+# (endpoint_url, type_name, category, mcoo_implication)
+LAYERS: tuple[tuple[str, str, str, str], ...] = (
     (
-        "syke:tulvariskialueet_2022_2027",
+        os.getenv("SYKE_FLOOD_WFS_URL") or "https://paikkatiedot.ymparisto.fi/geoserver/inspire_nz/wfs",
+        os.getenv("SYKE_FLOOD_TYPENAME") or "inspire_nz:NZ.Tulvavaaravyohykkeet_Vesistotulva_1_100a",
         "flood_risk",
         "no-go",    # flooded in HQ100 event — impassable to ground forces
     ),
     (
-        "syke:n2000",
+        os.getenv("SYKE_PROTECTED_WFS_URL") or "https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wfs",
+        os.getenv("SYKE_PROTECTED_TYPENAME") or "inspire_ps:PS.ProtectedSitesSpecialAreaOfConservation",
         "protected_area",
         "slow-go",  # legally restricted movement, not physically impassable
     ),
@@ -62,12 +63,12 @@ NS_WFS = {
 }
 
 
-def _wfs_params(layer: str, bbox: BBox) -> dict[str, str]:
+def _wfs_params(type_name: str, bbox: BBox) -> dict[str, str]:
     return {
         "service": "WFS",
         "version": "2.0.0",
         "request": "GetFeature",
-        "typeNames": layer,
+        "typeNames": type_name,
         "outputFormat": "application/json",
         "srsName": "EPSG:4326",
         "count": "500",
@@ -104,7 +105,13 @@ class SYKEProvider(Provider):
         super().__init__(id="syke", label="SYKE — flood risk & protected areas")
 
     async def fetch(self, bbox: BBox, t: datetime | None) -> FeatureCollection:
-        cache_key = {"bbox": bbox.as_list(), "layers": [l for l, _, _ in LAYERS]}
+        cache_key = {
+            "bbox": bbox.as_list(),
+            "layers": [
+                {"url": url, "type": type_name, "category": category}
+                for url, type_name, category, _ in LAYERS
+            ],
+        }
         cached = cache.read(self.id, cache_key, CACHE_TTL_SECONDS)
         if cached is not None:
             self.mark("ok", "served from cache")
@@ -120,11 +127,11 @@ class SYKEProvider(Provider):
         errors: list[str] = []
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            for layer, category, mcoo in LAYERS:
+            for endpoint_url, type_name, category, mcoo in LAYERS:
                 try:
                     resp = await client.get(
-                        WFS_URL,
-                        params=_wfs_params(layer, bbox),
+                        endpoint_url,
+                        params=_wfs_params(type_name, bbox),
                         headers={"User-Agent": "DefenceHack-IPB/0.1"},
                     )
                     resp.raise_for_status()
@@ -146,7 +153,7 @@ class SYKEProvider(Provider):
 
         cache.write(self.id, cache_key, {"features": all_features})
         by_cat = {c: sum(1 for f in all_features if f["properties"]["category"] == c)
-                  for _, c, _ in LAYERS}
+                  for _, _, c, _ in LAYERS}
         status = "ok" if all_features else "partial"
         reason = ", ".join(f"{v} {k}" for k, v in by_cat.items() if v) or "no features in bbox"
         if errors:

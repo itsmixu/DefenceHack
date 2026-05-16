@@ -42,6 +42,34 @@ from ..schemas import FeatureCollection, LayerMeta
 VALID_VEHICLE_CLASSES = frozenset(doctrine.VEHICLE_CLASSES)
 
 
+def _iter_lonlat(coords: Any):
+    if isinstance(coords, (list, tuple)):
+        if len(coords) == 2 and all(isinstance(v, (int, float)) for v in coords):
+            yield float(coords[0]), float(coords[1])
+            return
+        for item in coords:
+            yield from _iter_lonlat(item)
+
+
+def _geometry_bbox(geometry: Any) -> tuple[float, float, float, float] | None:
+    if not isinstance(geometry, dict):
+        return None
+    coords = geometry.get("coordinates")
+    if coords is None:
+        return None
+    pts = list(_iter_lonlat(coords))
+    if not pts:
+        return None
+    lons = [p[0] for p in pts]
+    lats = [p[1] for p in pts]
+    return (min(lons), min(lats), max(lons), max(lats))
+
+
+def _bbox_intersects(a: tuple[float, float, float, float],
+                     b: tuple[float, float, float, float]) -> bool:
+    return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
+
+
 async def build_mobility(
     bbox: BBox, t: datetime | None, vehicle_class: str
 ) -> FeatureCollection:
@@ -64,12 +92,13 @@ async def build_mobility(
             source_status[src] = res.meta.status
             by_source[src] = res.features
 
-    # Build a set of flood-zone bboxes for quick impassable override.
-    # (Full polygon-in-polygon is expensive; we tag features whose centroid
-    # falls inside any flood polygon bbox — good enough for a tactical product.)
     flood_features = [
         f for f in by_source.get("syke", [])
         if (f.get("properties") or {}).get("category") == "flood_risk"
+    ]
+    flood_bboxes = [
+        fb for fb in (_geometry_bbox(f.get("geometry")) for f in flood_features)
+        if fb is not None
     ]
 
     features: list[dict[str, Any]] = []
@@ -81,13 +110,19 @@ async def build_mobility(
         classification = doctrine.classify_terrain(terrain)
         mcoo_class = classification["class"]
 
-        # Flood override — if this feature overlaps a flood risk zone.
-        # Simple heuristic: if there are any flood features in the bbox we
-        # flag lakeside and low-lying terrain as potentially flooded.
-        if flood_features and mcoo_class != "no-go" and terrain in ("Suo",):
+        terrain_bbox = _geometry_bbox(f.get("geometry"))
+        in_flood_zone = (
+            terrain_bbox is not None
+            and any(_bbox_intersects(terrain_bbox, fb) for fb in flood_bboxes)
+        )
+
+        if in_flood_zone and mcoo_class != "no-go":
             mcoo_class = "no-go"
-            classification = {"class": "no-go", "cite": "SYKE/HQ100",
-                              "reason": "flood risk overlay — seasonal inundation"}
+            classification = {
+                "class": "no-go",
+                "cite": "SYKE/HQ100",
+                "reason": "flood-risk overlap (SYKE HQ100) — impassable",
+            }
 
         speed = doctrine.speed_for_class(vehicle_class, mcoo_class, is_road=False)
         features.append({
@@ -113,11 +148,15 @@ async def build_mobility(
     for f in by_source.get("digiroad", []):
         props = f.get("properties") or {}
         is_bridge = bool(props.get("is_bridge"))
-        load_cap = props.get("load_capacity_tonnes")
+        load_cap_raw = props.get("load_capacity_tonnes")
+        try:
+            load_cap = float(load_cap_raw) if load_cap_raw is not None else None
+        except (TypeError, ValueError):
+            load_cap = None
         func_class = props.get("functional_class") or props.get("TOIMINNALLINEN_LUOKKA")
 
         road_info = doctrine.classify_road(func_class, is_bridge)
-        passable = doctrine.bridge_passable(vehicle_class, load_cap)
+        passable = doctrine.bridge_passable(vehicle_class, load_cap) if is_bridge else True
 
         if not passable:
             speed = 0.0

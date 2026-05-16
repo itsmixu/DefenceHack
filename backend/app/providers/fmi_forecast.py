@@ -50,7 +50,7 @@ FORECAST_PARAMETERS: tuple[str, ...] = (
     "PrecipitationAmount",  # Precipitation amount per time step (mm)
     "Humidity",             # Relative humidity (%)
     "Visibility",           # Horizontal visibility (m)
-    "CloudBase1",           # Lowest cloud base height (m AGL)
+    "CloudBase",            # Lowest cloud base height (m AGL)
 )
 
 CACHE_TTL_SECONDS = 60 * 60   # 1 hour — HARMONIE updates hourly
@@ -101,13 +101,15 @@ def _parse_forecast(xml_text: str) -> list[dict[str, Any]]:
     for (lat, lon, time_iso), params in sorted(grouped.items(), key=lambda x: x[0][2]):
         if not params:
             continue
+        if "CloudBase" in params and "CloudBase1" not in params:
+            params["CloudBase1"] = params["CloudBase"]
         # Derive a simple drone-rating hint so frontend can colour without
         # calling the analysis endpoint separately.
         wind = params.get("WindSpeedMS")
         gust = params.get("WindGust")
         temp = params.get("Temperature")
         vis  = params.get("Visibility")
-        ceil = params.get("CloudBase1")
+        ceil = params.get("CloudBase") or params.get("CloudBase1")
         prec = params.get("PrecipitationAmount")
         from .. import doctrine
         drone_rating, drone_summary, _ = doctrine.rate_drone(wind, gust, temp, vis, ceil, prec)

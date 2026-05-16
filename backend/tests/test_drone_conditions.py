@@ -118,3 +118,34 @@ def test_result_has_forecast_timeline(stubs_calm):
     result = asyncio.run(build_drone_conditions(BBOX, None))
     assert "forecast_timeline" in result
     assert isinstance(result["forecast_timeline"], list)
+
+
+def test_forecast_timeline_reads_cloudbase_key(monkeypatch):
+    forecast_feature = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [24.5, 60.5]},
+        "properties": {
+            "source": "fmi_forecast",
+            "time": "2026-05-16T12:00:00Z",
+            "drone_rating": "go",
+            "drone_summary": "ok",
+            "forecast": {
+                "WindSpeedMS": 4.0,
+                "WindGust": 6.0,
+                "Temperature": 10.0,
+                "Visibility": 8000.0,
+                "CloudBase": 320.0,
+                "TotalCloudCover": 55.0,
+                "PrecipitationAmount": 0.2,
+            },
+        },
+    }
+    providers = {
+        "fmi": _Stub("fmi", [FMI_CALM]),
+        "fmi_forecast": _Stub("fmi_forecast", [forecast_feature]),
+    }
+    monkeypatch.setattr(dc_module, "PROVIDERS", providers)
+
+    result = asyncio.run(build_drone_conditions(BBOX, None))
+    assert result["forecast_timeline"]
+    assert result["forecast_timeline"][0]["ceiling_m"] == 320.0

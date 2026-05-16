@@ -29,9 +29,9 @@ These analysis endpoints fuse multiple sources into doctrinal IPB products:
       MML DEM raster pipeline (rasterio + GeoTIFF) is implemented.
 
   GET /api/analyze/astronomical?bbox=…
-      Sun/moon/twilight — 3-day illumination forecast (civil/nautical/
-      astronomical twilight, moon phase, night_ops_rating). Computed locally
-      via astral — no external API, zero latency.
+      Sun/moon/twilight — 3-day illumination forecast (civil + nautical
+      dawn/dusk, moon phase, night_ops_rating). Computed locally via astral
+      — no external API, zero latency.
 """
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ async def astronomical(
 
     Returns a GeoJSON FeatureCollection with one Point per day at the
     bbox centroid. Each feature carries:
-      sunrise, sunset, civil_dawn, civil_dusk, noon
+      sunrise, sunset, civil_dawn, civil_dusk, nautical_dawn, nautical_dusk, noon
       moon_illumination_pct, moon_phase_days
       night_ops_rating: "dark" | "partial" | "bright"
       darkness_hours
