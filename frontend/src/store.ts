@@ -326,6 +326,42 @@ export const useToastStore = create<ToastsState>((set, get) => ({
     set((s) => ({ toasts: get().toasts.filter((t) => t.id !== id) })),
 }));
 
+// ---------- Tactical drawing state ----------
+// Bridges the TacticalTools side panel with DrawControl (inside MapContainer).
+// TacticalTools sets pendingType + pendingDrawMode; DrawControl consumes them.
+
+export const MILITARY_FEATURE_TYPES = [
+  { type: 'AOI',           label: 'Area of Operations',     mode: 'Polygon'   as const, color: '#ffffff', desc: 'Outer boundary of the operation' },
+  { type: 'NAI',           label: 'Named Area of Interest', mode: 'Polygon'   as const, color: '#3b82f6', desc: 'Intel collection target' },
+  { type: 'TAI',           label: 'Target Area of Interest',mode: 'Polygon'   as const, color: '#ef4444', desc: 'Engagement / action zone' },
+  { type: 'DP',            label: 'Decision Point',         mode: 'Marker'    as const, color: '#f59e0b', desc: 'Triggers a branch in the plan' },
+  { type: 'PHASE_LINE',    label: 'Phase Line',             mode: 'Polyline'  as const, color: '#22c55e', desc: 'Control line marking phase transition' },
+  { type: 'BOUNDARY',      label: 'Unit Boundary',          mode: 'Polyline'  as const, color: '#f59e0b', desc: 'Lateral boundary between adjacent units' },
+  { type: 'ROUTE',         label: 'Route / Axis',           mode: 'Polyline'  as const, color: '#a855f7', desc: 'Axis of advance or withdrawal route' },
+  { type: 'OBJECTIVE',     label: 'Objective',              mode: 'Polygon'   as const, color: '#ef4444', desc: 'Named objective to seize/destroy' },
+  { type: 'UNIT_FRIENDLY', label: 'Friendly Unit',          mode: 'Marker'    as const, color: '#3b82f6', desc: 'Friendly force position' },
+  { type: 'UNIT_ENEMY',    label: 'Enemy / Threat',         mode: 'Marker'    as const, color: '#ef4444', desc: 'Known or suspected enemy position' },
+  { type: 'CHOKE_POINT',   label: 'Choke Point',            mode: 'Marker'    as const, color: '#f59e0b', desc: 'Obstacle or terrain bottleneck' },
+  { type: 'HIDE_SITE',     label: 'Hide Site / Assembly',   mode: 'Polygon'   as const, color: '#22c55e', desc: 'Assembly area or concealed position' },
+  { type: 'annotation',    label: 'Annotation',             mode: 'Polygon'   as const, color: '#9ca3af', desc: 'Freeform note' },
+] as const;
+
+export type MilitaryFeatureType = typeof MILITARY_FEATURE_TYPES[number]['type'];
+
+interface TacticalState {
+  pendingType: MilitaryFeatureType | null;
+  pendingDrawMode: 'Polygon' | 'Polyline' | 'Marker' | null;
+  setPending: (type: MilitaryFeatureType, mode: 'Polygon' | 'Polyline' | 'Marker') => void;
+  clearPending: () => void;
+}
+
+export const useTacticalStore = create<TacticalState>((set) => ({
+  pendingType: null,
+  pendingDrawMode: null,
+  setPending: (pendingType, pendingDrawMode) => set({ pendingType, pendingDrawMode }),
+  clearPending: () => set({ pendingType: null, pendingDrawMode: null }),
+}));
+
 // ---------- OSM POI category filters (persisted) ----------
 interface OsmPoiFilterState {
   enabled: OsmPoiCategory[];

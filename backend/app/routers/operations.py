@@ -36,8 +36,19 @@ def create_plan(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("/plans")
-def list_plans() -> list[dict[str, Any]]:
-    return store.list_plans()
+def list_plans(
+    parent_id: str | None = None,
+    all: bool = False,
+) -> list[dict[str, Any]]:
+    """List saved plans.
+
+    ?all=true            → flat list of every plan (for tree building)
+    ?parent_id=<id>      → only children of that plan
+    (default)            → only top-level plans (no parent)
+    """
+    if all:
+        return store.list_all_plans()
+    return store.list_plans(parent_id=parent_id)
 
 
 @router.get("/plans/{plan_id}")

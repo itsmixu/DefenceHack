@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Activity, BookOpen, ClipboardList, Layers, Radar } from 'lucide-react';
 import { ClipboardList, Layers } from 'lucide-react';
 import LayerToggles from './LayerToggles';
+import SourceStatusList from './SourceStatusList';
 import DrawnList from './DrawnList';
 import BriefingPanel from './briefing/BriefingPanel';
 import PlansList from './PlansList';
@@ -16,8 +17,9 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'plans', label: 'Plans', icon: <BookOpen size={14} /> },
 ];
 import PlansPanel from './PlansPanel';
+import TacticalTools from './TacticalTools';
 
-type Tab = 'layers' | 'drawn';
+type Tab = 'layers' | 'sources' | 'drawn' | 'plans' | 'tools';
 
 export default function SidePanel() {
   const [tab, setTab] = useState<Tab>('layers');
@@ -29,19 +31,12 @@ export default function SidePanel() {
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">DefenceHack — Junction</p>
       </header>
 
-      <nav className="grid grid-cols-2 border-b border-white/10 text-[10px] uppercase tracking-[0.16em]">
-        <TabBtn
-          active={tab === 'layers'}
-          onClick={() => setTab('layers')}
-          icon={<Layers size={14} />}
-          label="Layers"
-        />
-        <TabBtn
-          active={tab === 'drawn'}
-          onClick={() => setTab('drawn')}
-          icon={<ClipboardList size={14} />}
-          label="Drawn"
-        />
+      <nav className="grid grid-cols-5 border-b border-white/10 text-[10px] uppercase tracking-[0.14em]">
+        <TabBtn active={tab === 'layers'}  onClick={() => setTab('layers')}  icon={<Layers size={12} />}        label="Layers"  />
+        <TabBtn active={tab === 'sources'} onClick={() => setTab('sources')} icon={<Activity size={12} />}      label="Sources" />
+        <TabBtn active={tab === 'drawn'}   onClick={() => setTab('drawn')}   icon={<ClipboardList size={12} />} label="Drawn"   />
+        <TabBtn active={tab === 'plans'}   onClick={() => setTab('plans')}   icon={<BookOpen size={12} />}      label="Plans"   />
+        <TabBtn active={tab === 'tools'}   onClick={() => setTab('tools')}   icon={<Crosshair size={12} />}     label="Tools"   />
       </nav>
 
       <main className="flex-1 overflow-y-auto p-3 text-sm text-white/90">

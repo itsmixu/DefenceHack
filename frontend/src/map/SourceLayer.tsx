@@ -17,6 +17,15 @@ import {
 } from '../store';
 import { getStyleForLayer } from './layerStyles';
 
+// Only these layers genuinely return different data for different timestamps.
+// All other layers (mml, digiroad, opencellid, n2yo, exposure, mcoo) are static
+// and must NOT be re-fetched when the timeline scrubber moves — doing so would
+// erase their cache and cause unnecessary network requests.
+// astronomy: computed locally by astral — any date, zero latency.
+// fmi_forecast: different forecast at different base times.
+// statfin: annual resolution — skip (same data all year, not useful to re-fetch hourly).
+const TIME_AWARE: Set<LayerKey> = new Set(['fmi', 'osm', 'astronomy', 'fmi_forecast']);
+
 interface Props {
   layer: LayerKey;
 }
@@ -57,12 +66,21 @@ export default function SourceLayer({ layer }: Props) {
     return { needsFetch: true, fetchBboxStr: expanded.join(',') };
   }, [bbox, coveredList]);
 
+  const isTimeAware = TIME_AWARE.has(layer);
+
   const query = useQuery({
-    queryKey: ['layer', layer, fetchBboxStr, selectedIso],
+    // Non-time-aware layers omit selectedIso from the key so they don't
+    // invalidate (and re-fetch) every time the timeline scrubber moves.
+    queryKey: isTimeAware
+      ? ['layer', layer, fetchBboxStr, selectedIso]
+      : ['layer', layer, fetchBboxStr],
     enabled: needsFetch && !!fetchBboxStr,
     queryFn: () => {
       if (!fetchBboxStr) throw new Error('no bbox');
-      return getLayer(layer, { bbox: fetchBboxStr, t: selectedIso });
+      const params = isTimeAware
+        ? { bbox: fetchBboxStr, t: selectedIso }
+        : { bbox: fetchBboxStr };
+      return getLayer(layer, params);
     },
   });
 

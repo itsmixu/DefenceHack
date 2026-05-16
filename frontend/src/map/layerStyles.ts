@@ -17,6 +17,8 @@ const baseColorByLayer: Record<LayerKey, string> = {
   astronomy: '#facc15',
   exposure: '#dc2626',
   mcoo: '#16a34a',
+  syke: '#2563eb',
+  astronomy: '#fbbf24',
 };
 
 // Cell tower colour by radio technology.
@@ -141,6 +143,35 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
         opts.dashArray = '4 6';
         break;
       }
+      case 'syke': {
+        // Flood risk zones (blue) and Natura 2000 protected areas (green).
+        const kind = String(p.kind ?? p.layer ?? '');
+        const isNatura = kind.includes('natura') || kind.includes('n2000');
+        opts.color = isNatura ? '#16a34a' : '#2563eb';
+        opts.fillColor = opts.color;
+        opts.fillOpacity = 0.25;
+        opts.weight = 1.5;
+        opts.dashArray = isNatura ? '6 4' : undefined;
+        break;
+      }
+      case 'fmi_forecast': {
+        // Forecast point-in-time features — semi-transparent, light blue.
+        opts.color = '#38bdf8';
+        opts.fillColor = '#38bdf8';
+        opts.fillOpacity = 0.15;
+        opts.weight = 1;
+        opts.dashArray = '4 4';
+        break;
+      }
+      case 'astronomy': {
+        // Astronomical daily features — coloured by night_ops_rating.
+        const rating = String(p.night_ops_rating ?? '');
+        opts.color = rating === 'dark' ? '#1e1b4b' : rating === 'partial' ? '#92400e' : '#fbbf24';
+        opts.fillColor = opts.color;
+        opts.fillOpacity = 0.2;
+        opts.weight = 1;
+        break;
+      }
     }
 
     return opts;
@@ -173,13 +204,19 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       color = cellRadioColor[radio] ?? '#3b82f6';
       radius = 7;
     } else if (layer === 'n2yo') {
-      // feature_type="footprint" features are Polygons handled by style().
-      // Only feature_type="position" Points reach here.
       const cat = String(p.category ?? '');
       if (cat === 'earth_observation') color = '#a855f7';
       else if (cat === 'weather') color = '#06b6d4';
       else color = '#6b7280';
       radius = 7;
+    } else if (layer === 'astronomy') {
+      // One point per day at bbox centroid — colour by night ops rating.
+      const rating = String(p.night_ops_rating ?? '');
+      color = rating === 'dark' ? '#818cf8' : rating === 'partial' ? '#f59e0b' : '#fbbf24';
+      radius = 9;
+    } else if (layer === 'fmi_forecast') {
+      color = '#38bdf8';
+      radius = 5;
     }
 
     return L.circleMarker(latlng, {
@@ -254,7 +291,55 @@ export function getStyleForLayer(layer: LayerKey): GeoJSONOptions {
       return;
     }
 
-    if (layer === 'n2yo') return; // footprint polygons — no popup
+    if (layer === 'n2yo') return;
+
+    if (layer === 'astronomy') {
+      const p = props as Record<string, unknown>;
+      const rating = String(p.night_ops_rating ?? '');
+      const ratingColor = rating === 'dark' ? '#818cf8' : rating === 'partial' ? '#f59e0b' : '#fbbf24';
+      const illum = p.moon_illumination_pct != null ? `${p.moon_illumination_pct}%` : '—';
+      const dark = p.darkness_hours != null ? `${Number(p.darkness_hours).toFixed(1)} h` : '—';
+      lyr.bindPopup(`
+        <div style="font-size:11px;line-height:1.6;min-width:180px">
+          <div style="font-weight:700;margin-bottom:4px">${p.date ?? '—'}</div>
+          <div><span style="color:#64748b">Night ops</span>: <strong style="color:${ratingColor}">${rating.toUpperCase()}</strong></div>
+          <div><span style="color:#64748b">Moon illum.</span>: <strong>${illum}</strong></div>
+          <div><span style="color:#64748b">Darkness</span>: <strong>${dark}</strong></div>
+          <div><span style="color:#64748b">Sunrise</span>: <strong>${p.sunrise ?? '—'}</strong></div>
+          <div><span style="color:#64748b">Sunset</span>: <strong>${p.sunset ?? '—'}</strong></div>
+          <div><span style="color:#64748b">Civil dawn</span>: <strong>${p.civil_dawn ?? '—'}</strong> / <strong>${p.civil_dusk ?? '—'}</strong> dusk</div>
+        </div>
+      `);
+      return;
+    }
+
+    if (layer === 'syke') {
+      const p = props as Record<string, unknown>;
+      const kind = String(p.kind ?? p.layer ?? 'Unknown');
+      const name = String(p.name ?? p.nimi ?? '');
+      lyr.bindPopup(`
+        <div style="font-size:11px;line-height:1.6;min-width:160px">
+          <div style="font-weight:700;margin-bottom:2px">${name || kind}</div>
+          <div><span style="color:#64748b">Type</span>: <strong>${kind}</strong></div>
+          ${p.area_ha ? `<div><span style="color:#64748b">Area</span>: <strong>${Number(p.area_ha).toFixed(0)} ha</strong></div>` : ''}
+        </div>
+      `);
+      return;
+    }
+
+    if (layer === 'fmi_forecast') {
+      const p = props as Record<string, unknown>;
+      lyr.bindPopup(`
+        <div style="font-size:11px;line-height:1.6;min-width:160px">
+          <div style="font-weight:700;margin-bottom:2px">Forecast — ${p.time ?? ''}</div>
+          ${p.temperature != null ? `<div><span style="color:#64748b">Temp</span>: <strong>${p.temperature}°C</strong></div>` : ''}
+          ${p.windspeedms != null ? `<div><span style="color:#64748b">Wind</span>: <strong>${p.windspeedms} m/s</strong></div>` : ''}
+          ${p.totalcloudcover != null ? `<div><span style="color:#64748b">Cloud</span>: <strong>${p.totalcloudcover}%</strong></div>` : ''}
+          ${p.precipitation1h != null ? `<div><span style="color:#64748b">Precip</span>: <strong>${p.precipitation1h} mm/h</strong></div>` : ''}
+        </div>
+      `);
+      return;
+    }
 
     const entries = Object.entries(props)
       .filter(([k]) => k !== 'source')

@@ -30,16 +30,9 @@ function MapHandle() {
 }
 
 const ALL_LAYERS: LayerKey[] = [
-  'osm',
-  'digiroad',
-  'mml',
-  'mml_contours',
-  'statfin',
-  'fmi',
-  'opencellid',
-  'n2yo',
-  'exposure',
-  'mcoo',
+  'osm', 'digiroad', 'mml', 'mml_contours', 'statfin',
+  'syke', 'fmi', 'fmi_forecast', 'astronomy',
+  'opencellid', 'n2yo', 'exposure', 'mcoo',
 ];
 
 export default function MapView() {
@@ -61,6 +54,7 @@ export default function MapView() {
   const backendReason = useBackendStatusStore((s) => s.reason);
 
   const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
+  const clearFeature = useFeatureCacheStore((s) => s.clear);
   const rangeStartMs = useTimelineStore((s) => s.rangeStartMs);
   const rangeEndMs = useTimelineStore((s) => s.rangeEndMs);
   const stepMinutes = useTimelineStore((s) => s.stepMinutes);
@@ -96,10 +90,15 @@ export default function MapView() {
     setTimelineStartMs(rangeStartMs);
   }, [rangeStartMs]);
 
+  // When the timeline scrubs, only clear and re-fetch time-aware layers (fmi, osm).
+  // Static layers (mml, digiroad, opencellid, etc.) retain their cache so they
+  // don't make unnecessary network requests on every slider move.
   useEffect(() => {
-    clearAllFeatures();
-    queryClient.invalidateQueries({ queryKey: ['layer'] });
-  }, [selectedMs, clearAllFeatures, queryClient]);
+    (['fmi', 'osm'] as const).forEach((l) => {
+      clearFeature(l);
+      queryClient.invalidateQueries({ queryKey: ['layer', l] });
+    });
+  }, [selectedMs, clearFeature, queryClient]);
 
   const loadingLayers = useMemo(
     () => ALL_LAYERS.filter((id) => active[id] && loading[id]),

@@ -208,10 +208,6 @@ export interface Plan extends PlanSummary {
 
 export interface PlanVersionSummary {
 // ── Plans & versions ──────────────────────────────────────────────────────────
-//
-// A Plan is a named save of the current map state. Multiple version snapshots
-// can be attached to each plan so trainees can scrub through how the plan
-// evolved from initial draft to final approved order.
 
 export interface Plan {
   id: string;
@@ -223,6 +219,14 @@ export interface Plan {
   active_layers: string[];
   notes: string;
   role?: string;
+  // Command hierarchy
+  unit?: string;
+  commander_name?: string;
+  parent_plan_id?: string | null;
+  // Phase planning
+  phases?: Phase[];
+  // Conditions captured at save time
+  conditions_snapshot?: Record<string, unknown>;
 }
 
 /** Summary returned by GET /api/plans (no drawn_features to keep payload small). */
@@ -270,7 +274,6 @@ export interface Operation {
   drawn_features: FeatureCollection;
   active_layers: string[];
   notes: string;
-  /** Snapshot of live data captured at save time (fmi, astronomy, etc.). */
   conditions_snapshot?: Record<string, unknown>;
 }
 
@@ -284,6 +287,11 @@ export interface CreatePlanBody {
   active_layers?: string[];
   notes?: string;
   role?: string;
+  unit?: string;
+  commander_name?: string;
+  parent_plan_id?: string | null;
+  phases?: Phase[];
+  conditions_snapshot?: Record<string, unknown>;
 }
 
 export interface CreateVersionBody {
