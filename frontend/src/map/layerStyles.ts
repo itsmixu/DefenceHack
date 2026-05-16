@@ -179,12 +179,19 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
         break;
       }
       case 'fmi_forecast': {
-        // Forecast point-in-time features — semi-transparent, light blue.
-        opts.color = '#38bdf8';
-        opts.fillColor = '#38bdf8';
-        opts.fillOpacity = 0.15;
-        opts.weight = 1;
-        opts.dashArray = '4 4';
+        // Forecast zones — color by drone rating (doctrinal fusion of
+        // wind/temp/visibility/ceiling). Green=go, amber=marginal, red=no-go.
+        const rating = String(p.drone_rating ?? '').toLowerCase();
+        const fill =
+          rating === 'no-go' ? '#dc2626' :
+          rating === 'marginal' ? '#f59e0b' :
+          rating === 'go' ? '#16a34a' :
+          '#38bdf8';
+        opts.color = fill;
+        opts.fillColor = fill;
+        opts.fillOpacity = 0.22;
+        opts.weight = 1.5;
+        opts.dashArray = '4 3';
         break;
       }
       case 'astronomy': {
@@ -531,6 +538,29 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
       }
 
       const aviation = p.aviation_rating ? String(p.aviation_rating) : '';
+
+      // Permanent on-map label so the user can read conditions at a glance
+      // without clicking. Arrows point in the direction the wind is going.
+      const cardinalArrows = ['↓','↙','←','↖','↑','↗','→','↘'];
+      const windArrow = Number.isFinite(windDeg)
+        ? cardinalArrows[Math.round((((windDeg % 360) + 360) % 360) / 45) % 8]
+        : '';
+      const labelRows: string[] = [];
+      if (Number.isFinite(tempC)) labelRows.push(`${tempC.toFixed(0)}°C`);
+      if (Number.isFinite(windMs)) labelRows.push(`${windMs.toFixed(0)} m/s ${windArrow}`.trim());
+      if (Number.isFinite(precip) && precip >= 0.1) labelRows.push(`☂ ${precip.toFixed(1)}`);
+      else if (Number.isFinite(cloud)) labelRows.push(`☁ ${Math.round(cloud)}%`);
+      const labelHtml = labelRows.length
+        ? `<div class="fmi-forecast-label">${labelRows.map((r) => `<span>${r}</span>`).join('')}</div>`
+        : '';
+      if (labelHtml) {
+        lyr.bindTooltip(labelHtml, {
+          permanent: true,
+          direction: 'center',
+          className: 'fmi-forecast-tooltip',
+          opacity: 1,
+        });
+      }
 
       lyr.bindPopup(buildPopup({
         header: 'Forecast',

@@ -148,6 +148,9 @@ export default function SourceLayer({ layer }: Props) {
     // once and the slider has no visible effect. Pick the timestep nearest to
     // committedMs at each grid point so each slider move snaps to one frame.
     if (layer === 'fmi_forecast') {
+      // Step 1: pick the timestep nearest committedMs at each grid cell so
+      // moving the slider snaps to one frame (forecast has 48 timesteps per
+      // cell stacked at identical lat/lon).
       type GridKey = string;
       const target = committedMs;
       const best = new Map<GridKey, { delta: number; feature: Feature }>();
@@ -162,10 +165,42 @@ export default function SourceLayer({ layer }: Props) {
         const cur = best.get(key);
         if (!cur || delta < cur.delta) best.set(key, { delta, feature: f });
       }
-      return {
-        type: 'FeatureCollection',
-        features: [...best.values()].map((v) => v.feature),
-      };
+      const picked = [...best.values()].map((v) => v.feature);
+
+      // Step 2: convert each Point into a Polygon rectangle covering that
+      // grid cell's slice of the bbox, so the map shows colored weather
+      // zones instead of clickable dots. Cell size derived from the spread
+      // of points themselves (works for any NxN grid).
+      const pts = picked
+        .map((f) => f.geometry)
+        .filter((g): g is GeoJSON.Point => g?.type === 'Point');
+      if (pts.length === 0) {
+        return { type: 'FeatureCollection', features: picked };
+      }
+      const lons = [...new Set(pts.map((g) => g.coordinates[0]))].sort((a, b) => a - b);
+      const lats = [...new Set(pts.map((g) => g.coordinates[1]))].sort((a, b) => a - b);
+      const dLon = lons.length > 1 ? (lons[lons.length - 1] - lons[0]) / (lons.length - 1) : 0.1;
+      const dLat = lats.length > 1 ? (lats[lats.length - 1] - lats[0]) / (lats.length - 1) : 0.1;
+      const hLon = dLon / 2;
+      const hLat = dLat / 2;
+
+      const polygons: Feature[] = picked.map((f) => {
+        const g = f.geometry as GeoJSON.Point;
+        const [lon, lat] = g.coordinates;
+        const ring: [number, number][] = [
+          [lon - hLon, lat - hLat],
+          [lon + hLon, lat - hLat],
+          [lon + hLon, lat + hLat],
+          [lon - hLon, lat + hLat],
+          [lon - hLon, lat - hLat],
+        ];
+        return {
+          type: 'Feature',
+          properties: { ...(f.properties ?? {}), _center: [lon, lat] },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        };
+      });
+      return { type: 'FeatureCollection', features: polygons };
     }
 
     return { type: 'FeatureCollection', features: cachedFeatures };
