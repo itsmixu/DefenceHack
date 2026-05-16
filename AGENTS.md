@@ -16,7 +16,7 @@ Each agent has a strict ownership boundary. Violating it causes merge
 conflicts. Do not touch files outside your zone without an explicit
 human instruction.
 
-### Windsurf (Cascade) — Map zone
+### Claude Code — Map zone
 
 **Owns:** `frontend/src/map/`, `frontend/src/drawing/`
 
@@ -30,12 +30,12 @@ human instruction.
 - Layer toggle panel (the UI control that turns layers on/off)
 
 **Do NOT touch:**
-- `frontend/src/dashboard/` — that is Claude Code's zone
+- `frontend/src/dashboard/` — that is Windsurf's zone
 - `backend/` — ever, unless human says so
 
 ---
 
-### Claude Code — Dashboard zone
+### Windsurf (Cascade) — Dashboard zone
 
 **Owns:** `frontend/src/dashboard/`, `frontend/src/api/`
 
@@ -49,11 +49,11 @@ human instruction.
 - Time/date picker and AOI search bar (they feed data into the
   dashboard, not the map)
 - Any cross-cutting state (Zustand store if added) lives in
-  `frontend/src/lib/` — coordinate with Windsurf before adding
+  `frontend/src/lib/` — coordinate with Claude Code before adding
 
 **Do NOT touch:**
-- `frontend/src/map/` — that is Windsurf's zone
-- `frontend/src/drawing/` — that is Windsurf's zone
+- `frontend/src/map/` — that is Claude Code's zone
+- `frontend/src/drawing/` — that is Claude Code's zone
 - `backend/` — ever, unless human says so
 
 ---
@@ -77,13 +77,13 @@ Both agents may read but must **coordinate before writing**:
 The map and dashboard are decoupled through **shared state only** —
 no direct component imports across the zone boundary.
 
-- Windsurf fires events / updates a Zustand slice (e.g. `mapSlice`)
+- Claude Code fires events / updates a Zustand slice (e.g. `mapSlice`)
   when the visible bbox changes or a drawing is completed.
-- Claude Code reads from that slice in the dashboard; it never imports
+- Windsurf reads from that slice in the dashboard; it never imports
   a component from `map/` or `drawing/`.
-- Conversely, Windsurf reads from `dashboardSlice` (e.g. active layers,
+- Conversely, Claude Code reads from `dashboardSlice` (e.g. active layers,
   selected time) but never imports from `dashboard/`.
-- The `api/` clients (Claude Code's zone) are imported by both sides —
+- The `api/` clients (Windsurf's zone) are imported by both sides —
   that is intentional and fine.
 
 ---
@@ -209,13 +209,13 @@ DefenceHack/
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx
-│       ├── api/               # typed clients for backend endpoints  [Claude Code]
-│       ├── map/               # [Windsurf]
+│       ├── api/               # typed clients for backend endpoints  [Windsurf]
+│       ├── map/               # [Claude Code]
 │       │   ├── MapView.tsx    # main Leaflet container
 │       │   ├── basemaps.ts    # OSM, MML WMTS configs
 │       │   └── layers/        # one component per layer type
-│       ├── drawing/           # geoman setup, drawn-features store   [Windsurf]
-│       ├── dashboard/         # side panel, stats widgets            [Claude Code]
+│       ├── drawing/           # geoman setup, drawn-features store   [Claude Code]
+│       ├── dashboard/         # side panel, stats widgets            [Windsurf]
 │       └── lib/               # shared utils (bbox, geojson helpers) [both]
 │
 └── data/                      # gitignored cached / downloaded data
