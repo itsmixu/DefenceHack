@@ -1,5 +1,7 @@
 import type {
   AstronomicalResponse,
+  CreatePlanBody,
+  CreateVersionBody,
   DroneConditionsResponse,
   LayerKey,
   LayerResponse,
@@ -16,13 +18,6 @@ import type {
   TimelineSnapshotResponse,
   VehicleClass,
   ViewshedResponse,
-  LayerKey,
-  Plan,
-  PlanSummary,
-  PlanVersion,
-  PlanVersionSummary,
-  CreatePlanBody,
-  CreateVersionBody,
 } from './types';
 
 export interface BboxQuery {
@@ -46,18 +41,36 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function fetchJsonAllowEmpty<T>(url: string, init?: RequestInit): Promise<T | null> {
-  const res = await fetch(url, init);
-  if (res.status === 204) return null;
-  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
-  return (await res.json()) as T;
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  return fetchJson<T>(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
-const jsonBody = (data: unknown): RequestInit => ({
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(data),
-});
+async function putJson<T>(url: string, body: unknown): Promise<T> {
+  return fetchJson<T>(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function patchJson<T>(url: string, body: unknown): Promise<T> {
+  return fetchJson<T>(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function deleteReq(url: string): Promise<void> {
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`DELETE ${url} -> HTTP ${res.status}`);
+  }
+}
 
 // ─── Sources & layers ─────────────────────────────────────────────────────
 
@@ -78,77 +91,92 @@ export function getTerrainEffects(query: BboxQuery): Promise<TerrainEffectsRespo
   return fetchJson<TerrainEffectsResponse>(`/api/analyze/terrain-effects${buildQuery(query)}`);
 }
 
-// ── Plans ─────────────────────────────────────────────────────────────────────
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`POST ${url} -> HTTP ${res.status}`);
-  return (await res.json()) as T;
+export function getDroneConditions(query: BboxQuery): Promise<DroneConditionsResponse> {
+  return fetchJson<DroneConditionsResponse>(`/api/analyze/drone-conditions${buildQuery(query)}`);
 }
 
-async function putJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`PUT ${url} -> HTTP ${res.status}`);
-  return (await res.json()) as T;
+export function getAstronomical(query: BboxQuery): Promise<AstronomicalResponse> {
+  return fetchJson<AstronomicalResponse>(`/api/analyze/astronomical${buildQuery(query)}`);
 }
 
-async function deleteReq(url: string): Promise<void> {
-  const res = await fetch(url, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`DELETE ${url} -> HTTP ${res.status}`);
+export function getMobility(
+  query: BboxQuery & { vehicle_class?: VehicleClass },
+): Promise<MobilityResponse> {
+  return fetchJson<MobilityResponse>(`/api/analyze/mobility${buildQuery(query)}`);
 }
 
-/** List all saved plans (no drawn_features — summary only). */
+export interface ViewshedQuery extends BboxQuery {
+  observer_lon: string;
+  observer_lat: string;
+  observer_height_m?: string;
+}
+
+export function getViewshed(query: ViewshedQuery): Promise<ViewshedResponse> {
+  return fetchJson<ViewshedResponse>(`/api/analyze/viewshed${buildQuery(query)}`);
+}
+
+// ─── Timeline ─────────────────────────────────────────────────────────────
+
+export function getTimelineCapabilities(): Promise<TimelineCapabilitiesResponse> {
+  return fetchJson<TimelineCapabilitiesResponse>('/api/timeline/capabilities');
+}
+
+export function getTimelineSnapshot(
+  query: BboxQuery & { sources?: string },
+): Promise<TimelineSnapshotResponse> {
+  return fetchJson<TimelineSnapshotResponse>(`/api/timeline/snapshot${buildQuery(query)}`);
+}
+
+// ── Plans ─────────────────────────────────────────────────────────────────
+
 export function listPlans(): Promise<PlanSummary[]> {
   return fetchJson<PlanSummary[]>('/api/plans');
 }
 
-/** Get a single plan with full drawn_features. */
 export function getPlan(id: string): Promise<Plan> {
   return fetchJson<Plan>(`/api/plans/${id}`);
 }
 
-/** Create a new plan. Returns the saved plan with its generated id. */
 export function createPlan(body: CreatePlanBody): Promise<Plan> {
   return postJson<Plan>('/api/plans', body);
 }
 
-/** Overwrite plan fields (partial update — send only what changed). */
 export function updatePlan(id: string, body: Partial<CreatePlanBody>): Promise<Plan> {
   return putJson<Plan>(`/api/plans/${id}`, body);
 }
 
-/** Delete a plan permanently. */
 export function deletePlan(id: string): Promise<void> {
   return deleteReq(`/api/plans/${id}`);
 }
 
-// ── Plan versions ─────────────────────────────────────────────────────────────
+// ── Plan versions ─────────────────────────────────────────────────────────
 
-/** List all version snapshots for a plan (oldest first, no drawn_features). */
 export function listPlanVersions(planId: string): Promise<PlanVersionSummary[]> {
   return fetchJson<PlanVersionSummary[]>(`/api/plans/${planId}/versions`);
 }
 
-/** Get a specific version snapshot with full drawn_features. */
 export function getPlanVersion(planId: string, version: number): Promise<PlanVersion> {
   return fetchJson<PlanVersion>(`/api/plans/${planId}/versions/${version}`);
 }
 
-/**
- * Save the current map state as a named, immutable version snapshot.
- *
- * Call this when the commander clicks "Save version" — pass the current
- * drawn_features, active_layers, bbox, notes, and optionally a live
- * conditions_snapshot (last FMI/astronomy response bodies).
- */
 export function createPlanVersion(planId: string, body: CreateVersionBody): Promise<PlanVersion> {
   return postJson<PlanVersion>(`/api/plans/${planId}/versions`, body);
+}
+
+// ── Operations ────────────────────────────────────────────────────────────
+
+export function listOperations(planId?: string): Promise<Operation[]> {
+  return fetchJson<Operation[]>(`/api/operations${planId ? `?plan_id=${planId}` : ''}`);
+}
+
+export function getOperation(id: string): Promise<Operation> {
+  return fetchJson<Operation>(`/api/operations/${id}`);
+}
+
+export function createOperation(body: Omit<Operation, 'id'>): Promise<Operation> {
+  return postJson<Operation>('/api/operations', body);
+}
+
+export function recordOperationActual(id: string, body: OperationActual): Promise<Operation> {
+  return patchJson<Operation>(`/api/operations/${id}/actual`, body);
 }
