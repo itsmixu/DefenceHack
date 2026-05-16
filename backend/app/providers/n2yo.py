@@ -30,6 +30,38 @@ from .base import Provider
 API_BASE = "https://api.n2yo.com/rest/v1/satellite"
 CACHE_TTL_SECONDS = 5 * 60  # 5 min — satellites move ~2 km/s, cache stays useful briefly
 
+_EARTH_RADIUS_KM = 6371.0
+_FOOTPRINT_VERTICES = 36  # polygon approximation of footprint circle
+
+
+def _footprint_radius_km(altitude_km: float) -> float:
+    """Horizon-to-horizon ground radius for a satellite at the given altitude.
+
+    This is the maximum area from which the satellite is above the horizon
+    (elevation ≥ 0°).  Imaging swath is narrower; this is the visibility
+    window — relevant for signal intercept and electro-optical observation.
+
+    Formula: half-angle θ = arccos(R / (R + h)), footprint = R × θ.
+    """
+    if altitude_km <= 0:
+        return 0.0
+    half_angle = math.acos(_EARTH_RADIUS_KM / (_EARTH_RADIUS_KM + altitude_km))
+    return _EARTH_RADIUS_KM * half_angle
+
+
+def _footprint_polygon(lon: float, lat: float, radius_km: float) -> dict:
+    """Approximate geodesic footprint circle as a GeoJSON Polygon."""
+    from pyproj import Geod
+    geod = Geod(ellps="WGS84")
+    radius_m = radius_km * 1000
+    azimuths = [i * (360 / _FOOTPRINT_VERTICES) for i in range(_FOOTPRINT_VERTICES)]
+    ring = []
+    for az in azimuths:
+        end_lon, end_lat, _ = geod.fwd(lon, lat, az, radius_m)
+        ring.append([end_lon, end_lat])
+    ring.append(ring[0])
+    return {"type": "Polygon", "coordinates": [ring]}
+
 # Categories queried in parallel. Extend with additional IDs if needed.
 CATEGORIES: dict[int, str] = {
     52: "earth_observation",
@@ -84,19 +116,34 @@ async def _fetch_above(
         sat_lon = sat.get("satlng")
         if sat_lat is None or sat_lon is None:
             continue
+        alt_km = sat.get("satalt")
+        radius_km = _footprint_radius_km(float(alt_km)) if alt_km is not None else None
+
+        base_props = {
+            "source": "n2yo",
+            "category": category_label,
+            "satid": sat.get("satid"),
+            "satname": sat.get("satname"),
+            "cospar_id": sat.get("intDesignator"),
+            "launch_date": sat.get("launchDate"),
+            "altitude_km": alt_km,
+            "footprint_radius_km": round(radius_km, 1) if radius_km is not None else None,
+            "footprint_note": (
+                "Horizon-to-horizon visibility circle. "
+                "Actual imaging swath is narrower (sensor-dependent)."
+            ),
+        }
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [float(sat_lon), float(sat_lat)]},
-            "properties": {
-                "source": "n2yo",
-                "category": category_label,
-                "satid": sat.get("satid"),
-                "satname": sat.get("satname"),
-                "cospar_id": sat.get("intDesignator"),
-                "launch_date": sat.get("launchDate"),
-                "altitude_km": sat.get("satalt"),
-            },
+            "properties": {**base_props, "feature_type": "position"},
         })
+        if radius_km is not None:
+            features.append({
+                "type": "Feature",
+                "geometry": _footprint_polygon(float(sat_lon), float(sat_lat), radius_km),
+                "properties": {**base_props, "feature_type": "footprint"},
+            })
     return features, None
 
 
@@ -142,15 +189,22 @@ class N2YOProvider(Provider):
 
         errors = [err for _, err in results if err]
 
-        # Deduplicate by satid in case a satellite appears in multiple categories.
-        seen: set[int] = set()
+        # Deduplicate by satid — each satellite now emits a position Point AND a
+        # footprint Polygon, so dedup on (satid, feature_type) not just satid.
+        seen: set[tuple] = set()
         features: list[dict] = []
         for group, _ in results:
             for f in group:
-                sid = f["properties"].get("satid")
-                if sid not in seen:
-                    seen.add(sid)
+                props = f["properties"]
+                key = (props.get("satid"), props.get("feature_type"))
+                if key not in seen:
+                    seen.add(key)
                     features.append(f)
+
+        # Count unique satellites (positions only) for the status string.
+        sat_count = sum(
+            1 for f in features if f["properties"].get("feature_type") == "position"
+        )
 
         if errors and not features:
             reason = "; ".join(errors[:2])
@@ -166,7 +220,7 @@ class N2YOProvider(Provider):
         cache.write(self.id, cache_key, {"features": features})
         status = "ok" if features and not errors else "partial"
         if features:
-            reason = f"{len(features)} satellites within {radius}°"
+            reason = f"{sat_count} satellites within {radius}°"
             if errors:
                 reason += f"; degraded ({'; '.join(errors[:1])})"
         else:
