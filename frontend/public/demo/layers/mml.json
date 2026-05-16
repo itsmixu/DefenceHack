@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "source": "mml", "elevation_m": 45 },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [24.1, 60.1],
+            [24.2, 60.1],
+            [24.2, 60.2],
+            [24.1, 60.2],
+            [24.1, 60.1]
+          ]
+        ]
+      }
+    }
+  ],
+  "meta": { "status": "ok", "attribution": "Demo data" }
+}

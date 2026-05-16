@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { GeoJSON } from 'react-leaflet';
 import { useQuery } from '@tanstack/react-query';
-import type { FeatureCollection } from 'geojson';
+import type { Feature, FeatureCollection } from 'geojson';
 import { getLayer } from '../api/client';
 import type { LayerKey } from '../api/types';
 import {
@@ -45,8 +45,20 @@ export default function SourceLayer({ layer }: Props) {
   const cachedFeatures = useFeatureCacheStore((s) => s.features[layer]);
   const coveredList = useFeatureCacheStore((s) => s.covered[layer]);
   const osmEnabled = useOsmPoiFilterStore((s) => s.enabled);
+  const clearLayerCache = useFeatureCacheStore((s) => s.clear);
   const committedMs = useTimelineStore((s) => s.committedMs);
   const selectedIso = useMemo(() => new Date(committedMs).toISOString(), [committedMs]);
+  const isTimeAware = TIME_AWARE_LAYER_SET.has(layer);
+
+  // Time-aware layers return different data per `t`, but the spatial coverage
+  // cache (`covered`) is keyed only on bbox. Without this effect, after the
+  // first fetch `alreadyCovered` would short-circuit `needsFetch=false` and
+  // the slider would never trigger a re-fetch. Clear the layer's cache when
+  // the committed time changes so the next render re-fetches for the new `t`.
+  useEffect(() => {
+    if (!isTimeAware) return;
+    clearLayerCache(layer);
+  }, [isTimeAware, committedMs, layer, clearLayerCache]);
 
   // Decide whether the current viewport is already covered by a previously
   // fetched bbox. If so, skip the network request and just render the cache.
@@ -61,8 +73,6 @@ export default function SourceLayer({ layer }: Props) {
     const expanded = expandBbox(viewport, 0.5);
     return { needsFetch: true, fetchBboxStr: expanded.join(',') };
   }, [bbox, coveredList, suppressedByZoom]);
-
-  const isTimeAware = TIME_AWARE_LAYER_SET.has(layer);
 
   const query = useQuery({
     // Non-time-aware layers omit selectedIso from the key so they don't
@@ -124,21 +134,49 @@ export default function SourceLayer({ layer }: Props) {
 
   const collection = useMemo<FeatureCollection | null>(() => {
     if (!cachedFeatures || cachedFeatures.length === 0) return null;
-    if (layer !== 'osm') return { type: 'FeatureCollection', features: cachedFeatures };
 
-    const visible = cachedFeatures.filter((f) => {
-      const cat = String((f.properties as Record<string, unknown> | null)?.category ?? '');
-      return osmEnabled.includes(cat as (typeof osmEnabled)[number]);
-    });
-    return { type: 'FeatureCollection', features: visible };
-  }, [cachedFeatures, layer, osmEnabled]);
+    if (layer === 'osm') {
+      const visible = cachedFeatures.filter((f) => {
+        const cat = String((f.properties as Record<string, unknown> | null)?.category ?? '');
+        return osmEnabled.includes(cat as (typeof osmEnabled)[number]);
+      });
+      return { type: 'FeatureCollection', features: visible };
+    }
+
+    // fmi_forecast returns 9 grid points × 48 hourly timesteps stacked at the
+    // same coordinates. Without time filtering the map shows every timestep at
+    // once and the slider has no visible effect. Pick the timestep nearest to
+    // committedMs at each grid point so each slider move snaps to one frame.
+    if (layer === 'fmi_forecast') {
+      type GridKey = string;
+      const target = committedMs;
+      const best = new Map<GridKey, { delta: number; feature: Feature }>();
+      for (const f of cachedFeatures) {
+        const p = (f.properties ?? {}) as Record<string, unknown>;
+        const time = typeof p.time === 'string' ? Date.parse(p.time) : NaN;
+        if (!Number.isFinite(time)) continue;
+        const i = p.grid_i ?? 0;
+        const j = p.grid_j ?? 0;
+        const key: GridKey = `${i},${j}`;
+        const delta = Math.abs(time - target);
+        const cur = best.get(key);
+        if (!cur || delta < cur.delta) best.set(key, { delta, feature: f });
+      }
+      return {
+        type: 'FeatureCollection',
+        features: [...best.values()].map((v) => v.feature),
+      };
+    }
+
+    return { type: 'FeatureCollection', features: cachedFeatures };
+  }, [cachedFeatures, layer, osmEnabled, committedMs]);
 
   if (suppressedByZoom) return null;
   if (!collection || collection.features.length === 0) return null;
 
   return (
     <GeoJSON
-      key={`${layer}-${cachedFeatures?.length ?? 0}-z${zoom ?? 'na'}`}
+      key={`${layer}-${cachedFeatures?.length ?? 0}-${collection.features.length}-${isTimeAware ? committedMs : 'na'}-z${zoom ?? 'na'}`}
       data={collection}
       style={style.style}
       pointToLayer={style.pointToLayer}

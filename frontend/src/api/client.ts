@@ -85,6 +85,21 @@ export function getSources(): Promise<SourceInfo[]> {
 }
 
 export function getLayer(layer: LayerKey, query: BboxQuery): Promise<LayerResponse> {
+  // Demo mode: if the page is opened with `?demo=1` or `localStorage.demo === '1'`,
+  // load canned demo files from `public/demo/layers/<layer>.json` so the frontend
+  // works without a backend.
+  try {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const demoQ = params.get('demo');
+      const demoLocal = window.localStorage?.getItem?.('demo');
+      if (demoQ === '1' || demoLocal === '1') {
+        return fetchJson<LayerResponse>(`/demo/layers/${layer}.json`);
+      }
+    }
+  } catch {
+    // ignore and fall back to normal behaviour
+  }
   if (layer === 'mcoo') {
     return fetchJson<LayerResponse>(`/api/analyze/mcoo${buildQuery(query)}`);
   }

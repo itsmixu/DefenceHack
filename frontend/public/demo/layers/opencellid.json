@@ -1,0 +1,11 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "source": "opencellid", "id": "demo-tower" },
+      "geometry": { "type": "Point", "coordinates": [24.3, 60.22] }
+    }
+  ],
+  "meta": { "status": "ok", "attribution": "Demo data" }
+}
