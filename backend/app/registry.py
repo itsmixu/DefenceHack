@@ -11,7 +11,7 @@ from .providers.fmi import FMIProvider
 from .providers.fmi_forecast import FMIForecastProvider
 from .providers.mml import MMLProvider
 from .providers.mml_contours import MMLContoursProvider
-from .providers.n2yo import N2YOProvider
+from .providers.starlink import StarlinkProvider
 from .providers.opencellid import OpenCelliDProvider
 from .providers.osm import OSMProvider
 from .providers.statfin import StatFinProvider
@@ -37,7 +37,7 @@ SOURCES: tuple[SourceSpec, ...] = (
     # Global open data
     SourceSpec("osm",          "OpenStreetMap — infrastructure (hospitals, airfields, rail, rivers)"),
     SourceSpec("opencellid",   "OpenCelliD — cell tower locations & coverage"),
-    SourceSpec("n2yo",         "N2YO — satellite overpass tracking"),
+    SourceSpec("starlink",      "Starlink — real-time LEO constellation (Celestrak TLE)"),
     # Derived / computed
     SourceSpec("exposure",     "Terrain exposure — danger zone scoring"),
     SourceSpec("astronomy",    "Astronomical — sun/moon/twilight (no API, local computation)"),
@@ -54,7 +54,7 @@ PROVIDERS: dict[str, Provider] = {
     "statfin":      StatFinProvider(),
     "digiroad":     DigiroadProvider(),
     "opencellid":   OpenCelliDProvider(),
-    "n2yo":         N2YOProvider(),
+    "starlink":     StarlinkProvider(),
     "exposure":     ExposureProvider(),
     "syke":         SYKEProvider(),
     "astronomy":    AstronomyProvider(),

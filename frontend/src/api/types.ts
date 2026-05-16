@@ -10,7 +10,7 @@ export type SourceId =
   | 'fmi_forecast'
   | 'syke'
   | 'opencellid'
-  | 'n2yo'
+  | 'starlink'
   | 'exposure'
   | 'astronomy';
 

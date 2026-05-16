@@ -18,7 +18,7 @@ import {
 import { getStyleForLayer } from './layerStyles';
 
 // Only these layers genuinely return different data for different timestamps.
-// All other layers (mml, digiroad, opencellid, n2yo, exposure, mcoo) are static
+// All other layers (mml, digiroad, opencellid, starlink, exposure, mcoo) are static
 // and must NOT be re-fetched when the timeline scrubber moves — doing so would
 // erase their cache and cause unnecessary network requests.
 // astronomy: computed locally by astral — any date, zero latency.

@@ -57,7 +57,7 @@ WHICH SOURCES ARE TIME-AWARE:
                     empty with status="unavailable" and an explanation.
                     Miko should hide the forecast layer when t is in the past.
 
-  n2yo         ❌  Real-time only. API does not support historical positions.
+  starlink     ❌  Real-time only. TLE propagation produces current position only.
 
   mml          ❌  Static terrain — no historical API, same data for all t.
 
@@ -120,9 +120,9 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
         "time_aware": False,
         "reason": "HARMONIE NWP only produces future forecasts. Use fmi for past data.",
     },
-    "n2yo": {
+    "starlink": {
         "time_aware": False,
-        "reason": "N2YO /above endpoint returns real-time positions only.",
+        "reason": "TLE propagation gives current position only; historical not supported.",
     },
     "mml": {
         "time_aware": False,

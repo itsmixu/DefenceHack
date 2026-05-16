@@ -13,7 +13,7 @@ export const PREFETCH_LAYERS: LayerKey[] = [
   'statfin',
   'fmi',
   'opencellid',
-  'n2yo',
+  'starlink',
   'exposure',
   'mcoo',
 ];
