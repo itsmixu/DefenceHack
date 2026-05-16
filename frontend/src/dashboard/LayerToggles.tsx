@@ -27,9 +27,9 @@ const LAYERS: LayerEntry[] = [
 ];
 
 const dotForStatus = (s?: LayerStatus) => {
-  if (!s) return 'bg-white/35';
+  if (!s || s === 'unknown') return 'bg-white/35';
   if (s === 'ok') return 'bg-emerald-300';
-  if (s === 'unavailable') return 'bg-amber-300';
+  if (s === 'unavailable' || s === 'partial' || s === 'degraded') return 'bg-amber-300';
   return 'bg-red-300';
 };
 
