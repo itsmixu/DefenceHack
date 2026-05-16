@@ -375,8 +375,8 @@ export const useToastStore = create<ToastsState>((set, get) => ({
 }));
 
 // ---------- Tactical drawing state ----------
-// Bridges the TacticalTools side panel with DrawControl (inside MapContainer).
-// TacticalTools sets pendingType + pendingDrawMode; DrawControl consumes them.
+// Bridges the bottom MapToolbar with DrawControl (inside MapContainer).
+// MapToolbar sets pendingType + pendingDrawMode; DrawControl consumes them.
 
 export const MILITARY_FEATURE_TYPES = [
   { type: 'AOI',           label: 'Area of Operations',     mode: 'Polygon'   as const, color: '#ffffff', desc: 'Outer boundary of the operation' },

@@ -127,17 +127,9 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
         opts.weight = 0.5;
         break;
       }
-      case 'opencellid': {
-        // Coverage ring polygons — dashed outline, very low fill so towers beneath stay visible.
-        const radio = String(p.radio ?? 'LTE').toUpperCase();
-        const c = cellRadioColor[radio] ?? '#3b82f6';
-        opts.color = c;
-        opts.fillColor = c;
-        opts.fillOpacity = 0.07;
-        opts.weight = 1.5;
-        opts.dashArray = '6 4';
-        break;
-      }
+      // opencellid: coverage rings are rendered as concentric L.circles in
+      // pointToLayer (heatmap pane with mix-blend-mode: screen) — the server
+      // polygons are filtered out in SourceLayer, so no case is needed here.
       case 'starlink': {
         // Only the footprint polygons should get this faint horizon style.
         // Position points are Leaflet circleMarkers (also path-styled by this
@@ -232,11 +224,29 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
       color = '#0ea5e9';
       radius = 7;
     } else if (layer === 'opencellid') {
-      // category="coverage" features are Polygons and go through style(), not here.
-      // Only Point features (category="tower") reach pointToLayer.
+      // Tower point → return a featureGroup containing one geodesic coverage
+      // circle (uses radius_m from the provider) plus the central marker dot.
+      // Popup binds to the group via onEachFeature.
       const radio = String(p.radio ?? 'LTE').toUpperCase();
-      color = cellRadioColor[radio] ?? '#3b82f6';
-      radius = 7;
+      const c = cellRadioColor[radio] ?? '#3b82f6';
+      const radiusM = Number(p.radius_m ?? 5000);
+      const coverage = L.circle(latlng, {
+        radius: radiusM,
+        color: c,
+        weight: 1.5,
+        fillColor: c,
+        fillOpacity: 0.08,
+        dashArray: '6 4',
+        interactive: false,
+      });
+      const dot = L.circleMarker(latlng, {
+        radius: 5 * scale,
+        color: '#fff',
+        weight: 2,
+        fillColor: c,
+        fillOpacity: 0.95,
+      });
+      return L.featureGroup([coverage, dot]);
     } else if (layer === 'starlink') {
       // Elevation angle → colour: high overhead = bright purple, near-horizon = dim
       const elev = Number(p.elevation_deg ?? 0);

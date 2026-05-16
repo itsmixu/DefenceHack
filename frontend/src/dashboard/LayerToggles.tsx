@@ -1,6 +1,6 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBboxStore, useFeatureCacheStore, useLayerStore } from '../store';
+import { useBboxStore, useFeatureCacheStore, useLayerStore, useToastStore } from '../store';
 import type { LayerKey, LayerStatus } from '../api/types';
 import { useOsmPoiFilterStore } from '../store';
 import { OSM_POI_CATEGORIES } from '../map/osmPoi';
@@ -49,10 +49,16 @@ export default function LayerToggles() {
   const clearAllOsm = useOsmPoiFilterStore((s) => s.clearAll);
   const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
   const queryClient = useQueryClient();
+  const pushToast = useToastStore((s) => s.push);
 
-  const handleForceReload = () => {
+  const handleReload = () => {
+    queryClient.invalidateQueries({ queryKey: ['layer'] });
+  };
+
+  const handleClearCache = () => {
     clearAllFeatures();
     queryClient.invalidateQueries({ queryKey: ['layer'] });
+    pushToast('info', 'Map data cache cleared');
   };
 
   return (
@@ -64,14 +70,26 @@ export default function LayerToggles() {
         <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
           Toggle layers. Each layer fetches when the map viewport changes.
         </p>
-        <button
-          type="button"
-          onClick={handleForceReload}
-          className="shrink-0 rounded border border-white/20 bg-white/[0.06] p-1 text-white/85 hover:bg-white/[0.14] hover:text-white"
-          title="Discard cached features and refetch every active layer"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleReload}
+            className="rounded border border-white/20 bg-white/[0.06] p-1 text-white/85 hover:bg-white/[0.14] hover:text-white"
+            title="Refetch every active layer (keeps the cache)"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleClearCache}
+            className="flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/75 transition hover:border-white hover:bg-white hover:text-black"
+            style={{ borderColor: '#393939', background: '#1a1a1a' }}
+            title="Discard cached layer features and refetch on next viewport change"
+          >
+            <Trash2 className="h-3 w-3" />
+            Clear cache
+          </button>
+        </div>
       </div>
       <ul className="space-y-1">
         {LAYERS.map((l) => {

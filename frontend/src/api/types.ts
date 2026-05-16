@@ -426,10 +426,13 @@ export interface FsFileContent extends FsFileMeta {
   center?: [number, number] | null;
   zoom?: number | null;
   drawn_features: FeatureCollection;
-  phases: Phase[];
-  current_phase: number;
   layer_snapshots: Record<string, FeatureCollection>;
   conditions: Record<string, unknown>;
+  // Phase planning — used by the collab multi-tab feature in
+  // FileManagerOverlay. A file may contain up to 6 phases. New files
+  // saved without phases just leave this undefined.
+  phases?: Phase[];
+  current_phase?: number;
 }
 
 export interface FsTree {
@@ -447,10 +450,11 @@ export interface FsSaveBody {
   timeline_selected_ms?: number | null;
   active_layers: string[];
   drawn_features: FeatureCollection;
-  phases?: Phase[];
-  current_phase?: number;
   layer_snapshots: Record<string, FeatureCollection>;
   conditions?: Record<string, unknown>;
+  // Phase planning — see FsFileContent.phases.
+  phases?: Phase[];
+  current_phase?: number;
   notes?: string;
   rank?: Rank;
   unit?: string;

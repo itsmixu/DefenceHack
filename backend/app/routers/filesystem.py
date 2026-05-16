@@ -159,8 +159,6 @@ def save_file(body: dict[str, Any]) -> dict[str, Any]:
       timeline_selected_ms* (int?) ms-since-epoch of the timeline scrubber
       active_layers*      (list)   layer IDs that were toggled on
       drawn_features      (obj)    GeoJSON FeatureCollection of user shapes
-      phases              (list)   phase objects (up to 5)
-      current_phase       (int)    active phase index
       layer_snapshots     (obj)    {layer_id: GeoJSON FeatureCollection}
                                    THE RECORDING: actual fetched features
                                    for every active layer at save time
@@ -192,7 +190,7 @@ def open_file(file_id: str) -> dict[str, Any]:
     The frontend should:
       1. Set timeline_selected_ms in useTimelineStore.
       2. Inject layer_snapshots into useFeatureCacheStore (bypassing network).
-      3. Restore drawn_features, phases, active_layers.
+      3. Restore drawn_features and active_layers.
       4. FlyTo bbox / center+zoom.
       5. Display conditions card if conditions is non-empty.
     """

@@ -1,21 +1,20 @@
 import { useState } from 'react';
-import { BookOpen, ClipboardList, Crosshair, Layers, Radar } from 'lucide-react';
+import { BookOpen, ClipboardList, Layers, Radar } from 'lucide-react';
 import LayerToggles from './LayerToggles';
 import DrawnList from './DrawnList';
 import BriefingPanel from './briefing/BriefingPanel';
 import PlansPanel from './PlansPanel';
-import TacticalTools from './TacticalTools';
 
 // File management lives in the floating top-left overlay
 // (frontend/src/dashboard/FileManagerOverlay.tsx) since multi-tab + command
 // hierarchy needs map-adjacent placement. The sidebar focuses on layers,
-// briefing, tactical tools, drawn-feature inspection, and plan history.
-type Tab = 'layers' | 'briefing' | 'tools' | 'drawn' | 'plans';
+// briefing, drawn-feature inspection, and plan history. The drawing /
+// tactical palette lives in the bottom MapToolbar.
+type Tab = 'layers' | 'briefing' | 'drawn' | 'plans';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'layers', label: 'Layers', icon: <Layers size={12} /> },
   { id: 'briefing', label: 'Brief', icon: <Radar size={12} /> },
-  { id: 'tools', label: 'Tools', icon: <Crosshair size={12} /> },
   { id: 'drawn', label: 'Drawn', icon: <ClipboardList size={12} /> },
   { id: 'plans', label: 'Plans', icon: <BookOpen size={12} /> },
 ];
@@ -30,7 +29,7 @@ export default function SidePanel() {
         <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">DefenceHack — Junction</p>
       </header>
 
-      <nav className="grid grid-cols-5 border-b text-[9px] uppercase tracking-[0.12em]" style={{ borderColor: '#393939' }}>
+      <nav className="grid grid-cols-4 border-b text-[9px] uppercase tracking-[0.12em]" style={{ borderColor: '#393939' }}>
         {TABS.map((t) => (
           <TabBtn
             key={t.id}
@@ -45,7 +44,6 @@ export default function SidePanel() {
       <main className="flex-1 overflow-y-auto p-3 text-sm text-white/90">
         {tab === 'layers' && <LayerToggles />}
         {tab === 'briefing' && <BriefingPanel />}
-        {tab === 'tools' && <TacticalTools />}
         {tab === 'drawn' && <DrawnList />}
         {tab === 'plans' && <PlansPanel />}
       </main>

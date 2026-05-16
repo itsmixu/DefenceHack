@@ -9,7 +9,6 @@ export const MIN_ZOOM_BY_LAYER: Partial<Record<LayerKey, number>> = {
   mml: 10,
   mml_contours: 11,
   digiroad: 10,
-  opencellid: 14,
 };
 
 export function isLayerSuppressedByZoom(layer: LayerKey, zoom: number | null): boolean {
