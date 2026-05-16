@@ -43,6 +43,7 @@ FOLDER SCHEMA (stored inline in index.json):
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -57,12 +58,40 @@ for _d in (FS_ROOT, CONTENT_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 
+PHASE_COLORS = [
+    "#3b82f6",  # blue
+    "#22c55e",  # green
+    "#ef4444",  # red
+    "#f59e0b",  # amber
+    "#8b5cf6",  # purple
+    "#06b6d4",  # cyan
+]
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
 def _new_id() -> str:
     return str(uuid.uuid4())
+
+
+def _default_feature_styles() -> dict[str, Any]:
+    return {
+        "AOI":           {"color": "#ffffff", "fillOpacity": 0.05, "weight": 2, "dashArray": "4,4"},
+        "NAI":           {"color": "#3b82f6", "fillOpacity": 0.15, "weight": 2},
+        "TAI":           {"color": "#ef4444", "fillOpacity": 0.20, "weight": 2},
+        "DP":            {"color": "#f59e0b", "weight": 2},
+        "PHASE_LINE":    {"color": "#22c55e", "weight": 3, "dashArray": "8,4"},
+        "BOUNDARY":      {"color": "#f59e0b", "weight": 2, "dashArray": "6,3"},
+        "ROUTE":         {"color": "#a855f7", "weight": 3},
+        "OBJECTIVE":     {"color": "#ef4444", "fillOpacity": 0.25, "weight": 2},
+        "UNIT_FRIENDLY": {"color": "#3b82f6", "weight": 2},
+        "UNIT_ENEMY":    {"color": "#ef4444", "weight": 2},
+        "CHOKE_POINT":   {"color": "#f59e0b", "weight": 2},
+        "HIDE_SITE":     {"color": "#22c55e", "fillOpacity": 0.20, "weight": 2, "dashArray": "4,4"},
+        "annotation":    {"color": "#9ca3af", "fillOpacity": 0.10, "weight": 1},
+    }
 
 
 def _load_index() -> dict[str, Any]:
@@ -367,3 +396,190 @@ def get_folder_contents(folder_id: str | None) -> dict[str, Any]:
     folders = [f for f in index["folders"].values() if f.get("parent_id") == folder_id]
     files   = [f for f in index["files"].values()   if f.get("folder_id") == folder_id]
     return {"folders": folders, "files": files}
+
+
+# ── Export / Import (v2 .ipb.json format) ─────────────────────────────────────
+
+def export_file_v2(file_id: str) -> dict[str, Any] | None:
+    """Build a self-contained v2 IPB Operation export dict for download."""
+    content = get_file_content(file_id)
+    if content is None:
+        return None
+
+    index = _load_index()
+
+    # Walk folder ancestry → ["Ops", "Spring 2026"]
+    folder_path: list[str] = []
+    fid = content.get("folder_id")
+    while fid:
+        folder = index["folders"].get(fid)
+        if not folder:
+            break
+        folder_path.insert(0, folder["name"])
+        fid = folder.get("parent_id")
+
+    stored_phases: list[dict[str, Any]] = content.get("phases") or []
+    current_phase_id: int = content.get("current_phase") or 1
+
+    if not stored_phases:
+        # Legacy single-state file — wrap entire file as Phase 1
+        v2_phases: list[dict[str, Any]] = [{
+            "phase_id": 1,
+            "name": "Phase 1",
+            "color": PHASE_COLORS[0],
+            "order": 0,
+            "notes": content.get("notes", ""),
+            "viewport": {
+                "bbox":   content.get("bbox"),
+                "center": content.get("center"),
+                "zoom":   content.get("zoom"),
+            },
+            "timeline": {"selected_ms": content.get("timeline_selected_ms")},
+            "active_layers": content.get("active_layers", []),
+            "drawn_features": content.get(
+                "drawn_features", {"type": "FeatureCollection", "features": []}
+            ),
+            "snapshot": {
+                "captured_at":    content.get("updated_at"),
+                "conditions":     content.get("conditions", {}),
+                "layer_snapshots": content.get("layer_snapshots", {}),
+            },
+        }]
+    else:
+        v2_phases = []
+        for i, ph in enumerate(stored_phases):
+            phase_id: int = ph.get("id", i + 1)
+            is_current = phase_id == current_phase_id
+            # Active phase falls back to file-level snapshots if phase has none yet
+            snapshots = ph.get("layer_snapshots") or (
+                content.get("layer_snapshots", {}) if is_current else {}
+            )
+            conditions = ph.get("conditions") or (
+                content.get("conditions", {}) if is_current else {}
+            )
+            v2_phases.append({
+                "phase_id": phase_id,
+                "name":     ph.get("name", f"Phase {phase_id}"),
+                "color":    ph.get("color", PHASE_COLORS[(phase_id - 1) % len(PHASE_COLORS)]),
+                "order":    i,
+                "notes":    ph.get("notes", ""),
+                "viewport": {
+                    "bbox":   ph.get("bbox")   or (content.get("bbox")   if is_current else None),
+                    "center": ph.get("center") or (content.get("center") if is_current else None),
+                    "zoom":   ph.get("zoom")   or (content.get("zoom")   if is_current else None),
+                },
+                "timeline": {
+                    "selected_ms": ph.get("timeline_selected_ms")
+                    or (content.get("timeline_selected_ms") if is_current else None),
+                },
+                "active_layers": ph.get("active_layers", []),
+                "drawn_features": ph.get(
+                    "drawn_features", {"type": "FeatureCollection", "features": []}
+                ),
+                "snapshot": {
+                    "captured_at":    content.get("updated_at"),
+                    "conditions":     conditions,
+                    "layer_snapshots": snapshots,
+                },
+            })
+
+    return {
+        "format":         "ipb-operation",
+        "format_version": 2,
+        "exported_at":    _now(),
+        "exported_by": {
+            "app":         "DefenceHack IPB Tool",
+            "app_version": "0.1.0",
+        },
+        "file": {
+            "original_id":              content.get("id"),
+            "name":                     content.get("name"),
+            "created_at":               content.get("created_at"),
+            "updated_at":               content.get("updated_at"),
+            "notes":                    content.get("notes", ""),
+            "unit":                     content.get("unit", ""),
+            "commander_name":           content.get("commander_name", ""),
+            "parent_file_original_id":  content.get("parent_file_id"),
+            "folder_path":              folder_path,
+        },
+        "active_phase_id": current_phase_id,
+        "phases":          v2_phases,
+        "shared": {
+            "drawn_features": {"type": "FeatureCollection", "features": []},
+            "feature_styles": _default_feature_styles(),
+        },
+    }
+
+
+def import_file_v2(data: dict[str, Any], strategy: str = "fresh") -> dict[str, Any]:
+    """Import a v2 .ipb.json dict and persist it. Returns created file metadata."""
+    fmt = data.get("format")
+    if fmt != "ipb-operation":
+        raise ValueError(f"Unsupported format {fmt!r}. Expected 'ipb-operation'.")
+    fv = data.get("format_version", 1)
+    if fv > 2:
+        raise ValueError(f"Format version {fv} is newer than this app supports (max 2).")
+
+    file_info: dict[str, Any] = data.get("file", {})
+    phases_v2: list[dict[str, Any]] = data.get("phases", [])
+    active_phase_id: int = data.get("active_phase_id", 1)
+
+    # Convert v2 phase shape → internal Phase schema
+    internal_phases: list[dict[str, Any]] = []
+    for ph in phases_v2:
+        vp = ph.get("viewport", {})
+        tl = ph.get("timeline", {})
+        ss = ph.get("snapshot", {})
+        pid = ph.get("phase_id", len(internal_phases) + 1)
+        internal_phases.append({
+            "id":                  pid,
+            "name":                ph.get("name", f"Phase {pid}"),
+            "color":               ph.get("color", PHASE_COLORS[(pid - 1) % len(PHASE_COLORS)]),
+            "notes":               ph.get("notes", ""),
+            "bbox":                vp.get("bbox"),
+            "center":              vp.get("center"),
+            "zoom":                vp.get("zoom"),
+            "timeline_selected_ms": tl.get("selected_ms"),
+            "active_layers":       ph.get("active_layers", []),
+            "drawn_features":      ph.get("drawn_features", {"type": "FeatureCollection", "features": []}),
+            "layer_snapshots":     ss.get("layer_snapshots", {}),
+            "conditions":          ss.get("conditions", {}),
+        })
+
+    # Use active phase for top-level file state
+    active_ph = next((p for p in phases_v2 if p.get("phase_id") == active_phase_id), None)
+    if not active_ph and phases_v2:
+        active_ph = phases_v2[0]
+        active_phase_id = active_ph.get("phase_id", 1)
+
+    save_body: dict[str, Any] = {
+        "name":            file_info.get("name", "Imported Operation"),
+        "notes":           file_info.get("notes", ""),
+        "unit":            file_info.get("unit", ""),
+        "commander_name":  file_info.get("commander_name", ""),
+        "phases":          internal_phases,
+        "current_phase":   active_phase_id,
+    }
+
+    if active_ph:
+        vp = active_ph.get("viewport", {})
+        tl = active_ph.get("timeline", {})
+        ss = active_ph.get("snapshot", {})
+        save_body.update({
+            "bbox":                 vp.get("bbox"),
+            "center":               vp.get("center"),
+            "zoom":                 vp.get("zoom"),
+            "timeline_selected_ms": tl.get("selected_ms"),
+            "active_layers":        active_ph.get("active_layers", []),
+            "drawn_features":       active_ph.get("drawn_features", {"type": "FeatureCollection", "features": []}),
+            "layer_snapshots":      ss.get("layer_snapshots", {}),
+            "conditions":           ss.get("conditions", {}),
+        })
+
+    # Merge strategy: keep original ID only if it doesn't exist locally
+    if strategy == "merge":
+        orig_id = file_info.get("original_id")
+        if orig_id and orig_id not in _load_index()["files"]:
+            save_body["id"] = orig_id
+
+    return save_file(save_body)
