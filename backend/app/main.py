@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import analyze, layers, operations, sources
+from .routers import analyze, layers, operations, sources, tiles
 
 load_dotenv()
 
@@ -27,6 +27,7 @@ app.include_router(sources.router)
 app.include_router(layers.router)
 app.include_router(operations.router)
 app.include_router(analyze.router)
+app.include_router(tiles.router)
 
 
 @app.get("/api/health", tags=["meta"])

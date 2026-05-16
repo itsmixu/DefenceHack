@@ -22,7 +22,7 @@ from ..schemas import FeatureCollection, LayerMeta, empty_collection
 from .base import Provider
 
 DEFAULT_WFS_URL = "https://avoinapi.vaylapilvi.fi/vaylatiedot/digiroad/ows"
-DEFAULT_LAYER = "digiroad:DR_LINKKI_K"
+DEFAULT_LAYER = "digiroad:dr_tielinkki_toim_lk"
 SRC_CRS = "EPSG:3067"
 MAX_FEATURES = 2000
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 1 day — road network changes slowly
@@ -43,6 +43,14 @@ PROPERTIES_KEEP: tuple[str, ...] = (
 )
 
 
+def _env_or_default(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    return value or default
+
+
 def _trim_properties(props: dict) -> dict:
     out = {k: props[k] for k in PROPERTIES_KEEP if k in props}
     out["source"] = "digiroad"
@@ -56,8 +64,8 @@ def _trim_properties(props: dict) -> dict:
 class DigiroadProvider(Provider):
     def __init__(self) -> None:
         super().__init__(id="digiroad", label="Digiroad — Väylä road network")
-        self.wfs_url = os.getenv("DIGIROAD_WFS_URL", DEFAULT_WFS_URL)
-        self.layer = os.getenv("DIGIROAD_LAYER", DEFAULT_LAYER)
+        self.wfs_url = _env_or_default("DIGIROAD_WFS_URL", DEFAULT_WFS_URL)
+        self.layer = _env_or_default("DIGIROAD_LAYER", DEFAULT_LAYER)
 
     async def fetch(self, bbox: BBox, t: datetime | None) -> FeatureCollection:
         src_bbox = reproject_bbox(

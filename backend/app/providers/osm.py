@@ -20,10 +20,16 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 1 day — OSM data changes slowly
 
 # Categories relevant to IPB (challenge.md §"logistics chokepoints", "infrastructure").
-# Tuple of (category, overpass selector). Kept tight to keep responses small.
+# Tuple of (category, overpass selector).
 CATEGORIES: tuple[tuple[str, str], ...] = (
     ("hospital", '["amenity"="hospital"]'),
+    ("clinic", '["amenity"="clinic"]'),
+    ("pharmacy", '["amenity"="pharmacy"]'),
     ("fuel", '["amenity"="fuel"]'),
+    ("charging_station", '["amenity"="charging_station"]'),
+    ("police", '["amenity"="police"]'),
+    ("fire_station", '["amenity"="fire_station"]'),
+    ("shelter", '["amenity"="shelter"]'),
     ("power_plant", '["power"="plant"]'),
     ("power_substation", '["power"="substation"]'),
 )
@@ -42,8 +48,20 @@ def _build_query(bbox: BBox) -> str:
 def _category_for(tags: dict[str, str]) -> str | None:
     if tags.get("amenity") == "hospital":
         return "hospital"
+    if tags.get("amenity") == "clinic":
+        return "clinic"
+    if tags.get("amenity") == "pharmacy":
+        return "pharmacy"
     if tags.get("amenity") == "fuel":
         return "fuel"
+    if tags.get("amenity") == "charging_station":
+        return "charging_station"
+    if tags.get("amenity") == "police":
+        return "police"
+    if tags.get("amenity") == "fire_station":
+        return "fire_station"
+    if tags.get("amenity") == "shelter":
+        return "shelter"
     power = tags.get("power")
     if power == "plant":
         return "power_plant"
