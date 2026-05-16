@@ -11,23 +11,19 @@ interface LayerEntry {
 }
 
 const LAYERS: LayerEntry[] = [
-  // ── Terrain & infrastructure ───────────────────────────────────────────────
-  { id: 'osm',         label: 'OSM POIs',       hint: 'hospitals, fuel, power' },
-  { id: 'digiroad',    label: 'Digiroad',        hint: 'roads & bridges' },
-  { id: 'mml',         label: 'MML terrain',     hint: 'land cover polygons' },
-  { id: 'mml_contours',label: 'MML contours',    hint: 'elevation lines' },
-  { id: 'statfin',     label: 'Population',      hint: 'Paavo choropleth' },
-  { id: 'syke',        label: 'Flood & Natura',  hint: 'SYKE flood risk + Natura 2000' },
-  // ── Weather ────────────────────────────────────────────────────────────────
-  { id: 'fmi',         label: 'Weather obs',     hint: 'FMI station observations' },
-  { id: 'fmi_forecast',label: 'Weather forecast',hint: 'FMI HARMONIE 48-h NWP' },
-  { id: 'astronomy',   label: 'Light / Moon',    hint: 'sun, moon, twilight windows' },
-  // ── SIGINT / space ─────────────────────────────────────────────────────────
-  { id: 'opencellid',  label: 'Cell towers',     hint: 'OpenCelliD coverage rings' },
-  { id: 'n2yo',        label: 'Satellites',      hint: 'overpass + footprints' },
-  // ── Analysis products ──────────────────────────────────────────────────────
-  { id: 'exposure',    label: 'Exposure',        hint: 'danger zones' },
-  { id: 'mcoo',        label: 'MCOO',            hint: 'go / slow-go / no-go' },
+  { id: 'osm', label: 'OSM POIs', hint: 'hospitals, fuel, power' },
+  { id: 'digiroad', label: 'Digiroad', hint: 'roads & bridges' },
+  { id: 'mml', label: 'MML terrain', hint: 'land cover polygons' },
+  { id: 'mml_contours', label: 'MML contours', hint: 'elevation lines' },
+  { id: 'statfin', label: 'Population', hint: 'Paavo choropleth' },
+  { id: 'fmi', label: 'Weather', hint: 'FMI stations (observations)' },
+  { id: 'fmi_forecast', label: 'Forecast', hint: 'FMI HARMONIE 48 h NWP' },
+  { id: 'syke', label: 'SYKE', hint: 'flood zones & Natura 2000' },
+  { id: 'opencellid', label: 'Cell towers', hint: 'OpenCelliD' },
+  { id: 'n2yo', label: 'Satellites', hint: 'overpass schedule' },
+  { id: 'astronomy', label: 'Astronomy', hint: 'sun / moon / twilight' },
+  { id: 'exposure', label: 'Exposure', hint: 'danger zones' },
+  { id: 'mcoo', label: 'MCOO', hint: 'go / slow-go / no-go' },
 ];
 
 const dotForStatus = (s?: LayerStatus) => {

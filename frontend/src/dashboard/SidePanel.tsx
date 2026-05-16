@@ -1,8 +1,21 @@
 import { useState } from 'react';
-import { Activity, BookOpen, ClipboardList, Layers, Crosshair } from 'lucide-react';
+import { Activity, BookOpen, ClipboardList, Layers, Radar } from 'lucide-react';
+import { ClipboardList, Layers } from 'lucide-react';
 import LayerToggles from './LayerToggles';
 import SourceStatusList from './SourceStatusList';
 import DrawnList from './DrawnList';
+import BriefingPanel from './briefing/BriefingPanel';
+import PlansList from './PlansList';
+
+type Tab = 'layers' | 'briefing' | 'sources' | 'drawn' | 'plans';
+
+const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'layers', label: 'Layers', icon: <Layers size={14} /> },
+  { id: 'briefing', label: 'Brief', icon: <Radar size={14} /> },
+  { id: 'sources', label: 'Sources', icon: <Activity size={14} /> },
+  { id: 'drawn', label: 'Drawn', icon: <ClipboardList size={14} /> },
+  { id: 'plans', label: 'Plans', icon: <BookOpen size={14} /> },
+];
 import PlansPanel from './PlansPanel';
 import TacticalTools from './TacticalTools';
 
@@ -27,11 +40,11 @@ export default function SidePanel() {
       </nav>
 
       <main className="flex-1 overflow-y-auto p-3 text-sm text-white/90">
-        {tab === 'layers'  && <LayerToggles />}
+        {tab === 'layers' && <LayerToggles />}
+        {tab === 'briefing' && <BriefingPanel />}
         {tab === 'sources' && <SourceStatusList />}
-        {tab === 'drawn'   && <DrawnList />}
-        {tab === 'plans'   && <PlansPanel />}
-        {tab === 'tools'   && <TacticalTools />}
+        {tab === 'drawn' && <DrawnList />}
+        {tab === 'plans' && <PlansList />}
       </main>
     </div>
   );
@@ -55,7 +68,7 @@ function TabBtn({ active, onClick, icon, label }: TabProps) {
       }`}
     >
       {icon}
-      <span className="text-[8px]">{label}</span>
+      <span>{label}</span>
     </button>
   );
 }

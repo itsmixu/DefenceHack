@@ -1,7 +1,21 @@
 import type {
+  AstronomicalResponse,
+  DroneConditionsResponse,
+  LayerKey,
   LayerResponse,
+  MobilityResponse,
+  Operation,
+  OperationActual,
+  Plan,
+  PlanSummary,
+  PlanVersion,
+  PlanVersionSummary,
   SourceInfo,
   TerrainEffectsResponse,
+  TimelineCapabilitiesResponse,
+  TimelineSnapshotResponse,
+  VehicleClass,
+  ViewshedResponse,
   LayerKey,
   Plan,
   PlanSummary,
@@ -26,11 +40,26 @@ const buildQuery = (params: Record<string, string | undefined>) => {
   return s ? `?${s}` : '';
 };
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
   if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
   return (await res.json()) as T;
 }
+
+async function fetchJsonAllowEmpty<T>(url: string, init?: RequestInit): Promise<T | null> {
+  const res = await fetch(url, init);
+  if (res.status === 204) return null;
+  if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
+
+const jsonBody = (data: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data),
+});
+
+// ─── Sources & layers ─────────────────────────────────────────────────────
 
 export function getSources(): Promise<SourceInfo[]> {
   return fetchJson<SourceInfo[]>('/api/sources');
@@ -42,6 +71,8 @@ export function getLayer(layer: LayerKey, query: BboxQuery): Promise<LayerRespon
   }
   return fetchJson<LayerResponse>(`/api/layers/${layer}${buildQuery(query)}`);
 }
+
+// ─── Analysis ─────────────────────────────────────────────────────────────
 
 export function getTerrainEffects(query: BboxQuery): Promise<TerrainEffectsResponse> {
   return fetchJson<TerrainEffectsResponse>(`/api/analyze/terrain-effects${buildQuery(query)}`);
