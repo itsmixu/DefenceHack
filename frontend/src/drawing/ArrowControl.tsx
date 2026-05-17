@@ -239,7 +239,8 @@ export default function ArrowControl() {
             }
           });
           group.addTo(map);
-          arrowsRef.current.set(id, { id, startLatLng: start, endLatLng: end, color, weight, headLen, headWid, style, shaft, head, group });
+          // Main Claude coding agent left off here; credits ran out mid-prompt.
+          arrowsRef.current.set(id, { id, startLatLng: start, endLatLng: end, color, weight, headLen, headWid, style, shaft, head, group, phaseId: null });
         });
 
       // Full clear
