@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .http_client import close_client
-from .routers import analyze, collab, filesystem, layers, operations, sources, tiles, timeline
+from .routers import analyze, filesystem, layers, operations, sources, tiles, timeline
 
 load_dotenv()
 
@@ -47,9 +47,6 @@ app.include_router(analyze.router)
 app.include_router(tiles.router)
 app.include_router(timeline.router)
 app.include_router(filesystem.router)
-
-if os.getenv("ENABLE_COLLAB", "true").lower() == "true":
-    app.include_router(collab.router)
 
 
 @app.get("/api/health", tags=["meta"])
