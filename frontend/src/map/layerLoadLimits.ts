@@ -5,10 +5,13 @@ import type { LayerKey } from '../api/types';
 // from crashing when a heavy GeoJSON source is enabled while the viewport
 // covers a huge area (e.g. all of Finland at z5).
 export const MIN_ZOOM_BY_LAYER: Partial<Record<LayerKey, number>> = {
-  osm: 11,
-  mml: 10,
-  mml_contours: 11,
-  digiroad: 10,
+  osm: 13,
+  digiroad: 13,
+  mml: 12,
+  mml_contours: 13,
+  syke: 11,
+  exposure: 15,
+  mcoo: 15,
 };
 
 export function isLayerSuppressedByZoom(layer: LayerKey, zoom: number | null): boolean {
