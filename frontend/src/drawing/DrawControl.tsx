@@ -37,9 +37,24 @@ export default function DrawControl() {
   useEffect(() => {
     if (!pendingDrawMode) return;
     const m = map as L.Map & {
-      pm: { enableDraw: (mode: string, opts?: Record<string, unknown>) => void };
+      pm: {
+        enableDraw: (mode: string, opts?: Record<string, unknown>) => void;
+        disableDraw?: () => void;
+      };
     };
-    m.pm.enableDraw(pendingDrawMode, { allowSelfIntersection: false });
+    // If a previous draw mode is still active, geoman can throw when we
+    // try to enable a different one — disable first.
+    try { m.pm.disableDraw?.(); } catch { /* ignore */ }
+    // `allowSelfIntersection` is a polygon-only option in geoman; passing
+    // it to Polyline / Marker modes is at best ignored and at worst throws.
+    const opts: Record<string, unknown> =
+      pendingDrawMode === 'Polygon' ? { allowSelfIntersection: false } : {};
+    try {
+      m.pm.enableDraw(pendingDrawMode, opts);
+    } catch (err) {
+      // Surface the geoman error in the console without crashing the React tree.
+      console.error('geoman enableDraw failed for', pendingDrawMode, err);
+    }
     // Keep pendingType alive until onCreate consumes it — don't clear yet.
   }, [pendingDrawMode, map]);
 
@@ -62,8 +77,19 @@ export default function DrawControl() {
 
     const drawn = new Map<number, TaggedLayer>();
 
+    // Set of feature_types that ARE managed by this component. Everything
+    // else (ARROW, SYMBOL, RULER) is owned by other controls and must NOT be
+    // wiped when we sync — that's what was crashing the app when drawing a
+    // polyline: setAll([newLine]) cleared every arrow / symbol / ruler from
+    // the store, triggering a cascade of teardown subscribers.
+    const GEOMAN_TYPES = new Set([
+      'AOI', 'NAI', 'TAI', 'DP', 'PHASE_LINE', 'BOUNDARY', 'ROUTE',
+      'OBJECTIVE', 'UNIT_FRIENDLY', 'UNIT_ENEMY', 'CHOKE_POINT', 'HIDE_SITE',
+      'annotation',
+    ]);
+
     const sync = () => {
-      const features: DrawnFeature[] = [];
+      const geomanFeatures: DrawnFeature[] = [];
       drawn.forEach((layer, id) => {
         const f = layer.toGeoJSON() as DrawnFeature;
         f.id = id;
@@ -71,9 +97,13 @@ export default function DrawControl() {
           ...(f.properties ?? {}),
           feature_type: layer._defenceHackFeatureType ?? 'annotation',
         };
-        features.push(f);
+        geomanFeatures.push(f);
       });
-      useDrawnStore.getState().setAll(features);
+      // Keep non-geoman features (ARROW, SYMBOL, RULER, anything else) intact.
+      const others = useDrawnStore.getState().features.filter(
+        (f) => !GEOMAN_TYPES.has(String(f.properties?.feature_type ?? '')),
+      );
+      useDrawnStore.getState().setAll([...others, ...geomanFeatures]);
     };
 
     const promptType = (current?: string): FeatureType => {

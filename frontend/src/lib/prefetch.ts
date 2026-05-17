@@ -1,5 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { getLayer } from '../api/client';
+import {
+  getAstronomical,
+  getDroneConditions,
+  getLayer,
+  getTerrainEffects,
+} from '../api/client';
 import type { LayerKey } from '../api/types';
 import { type Bbox4, expandBbox, useFeatureCacheStore } from '../store';
 
@@ -50,7 +55,7 @@ export async function prefetchBbox(
   const bboxStr = fetched.join(',');
   const addBatch = useFeatureCacheStore.getState().addBatch;
 
-  const tasks = PREFETCH_LAYERS.map(async (layer): Promise<PrefetchResult> => {
+  const layerTasks = PREFETCH_LAYERS.map(async (layer): Promise<PrefetchResult> => {
     try {
       const data = await qc.fetchQuery({
         queryKey: ['layer', layer, bboxStr, t ?? 'now'],
@@ -70,5 +75,32 @@ export async function prefetchBbox(
     }
   });
 
-  return Promise.all(tasks);
+  // Prefetch the three briefing analyses too — same bbox string so the
+  // BriefingPanel cards hit react-query's cache when the user opens them
+  // for a saved zone. Failures are swallowed; layers stay the source of
+  // truth for the prefetch summary.
+  const briefingBboxStr = bbox.join(',');
+  const briefingTasks: Promise<unknown>[] = [
+    qc.prefetchQuery({
+      queryKey: ['terrain-effects', briefingBboxStr, t ?? 'now'],
+      queryFn: () => getTerrainEffects({ bbox: briefingBboxStr, t }),
+      staleTime: 5 * 60_000,
+    }).catch(() => null),
+    qc.prefetchQuery({
+      queryKey: ['drone-conditions', briefingBboxStr, t ?? 'now'],
+      queryFn: () => getDroneConditions({ bbox: briefingBboxStr, t }),
+      staleTime: 5 * 60_000,
+    }).catch(() => null),
+    qc.prefetchQuery({
+      queryKey: ['astronomical', briefingBboxStr, t ?? 'now'],
+      queryFn: () => getAstronomical({ bbox: briefingBboxStr, t }),
+      staleTime: 60 * 60_000,
+    }).catch(() => null),
+  ];
+
+  const [layerResults] = await Promise.all([
+    Promise.all(layerTasks),
+    Promise.all(briefingTasks),
+  ]);
+  return layerResults;
 }

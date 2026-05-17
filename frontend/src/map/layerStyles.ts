@@ -225,29 +225,10 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
       color = '#0ea5e9';
       radius = 7;
     } else if (layer === 'opencellid') {
-      // Tower point → return a featureGroup containing one geodesic coverage
-      // circle (uses radius_m from the provider) plus the central marker dot.
-      // Popup binds to the group via onEachFeature.
+      // Tower point only — no coverage ring. Radio-tech colour preserved.
       const radio = String(p.radio ?? 'LTE').toUpperCase();
-      const c = cellRadioColor[radio] ?? '#3b82f6';
-      const radiusM = Number(p.radius_m ?? 5000);
-      const coverage = L.circle(latlng, {
-        radius: radiusM,
-        color: c,
-        weight: 1.5,
-        fillColor: c,
-        fillOpacity: 0.08,
-        dashArray: '6 4',
-        interactive: false,
-      });
-      const dot = L.circleMarker(latlng, {
-        radius: 5 * scale,
-        color: '#fff',
-        weight: 2,
-        fillColor: c,
-        fillOpacity: 0.95,
-      });
-      return L.featureGroup([coverage, dot]);
+      color = cellRadioColor[radio] ?? '#3b82f6';
+      radius = 6;
     } else if (layer === 'starlink') {
       // Elevation angle → colour: high overhead = bright purple, near-horizon = dim
       const elev = Number(p.elevation_deg ?? 0);
