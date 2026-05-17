@@ -46,7 +46,7 @@ export default function WelcomeModal() {
           <p>
             built for the <span className="text-white/90">Junction × Aalto Defence Hackathon</span> —
             automating intelligence preparation of the battlespace from
-            open-source data.
+            open-source data. <span className="text-white/90">we won. 🏆</span>
           </p>
           <p className="text-white/50">
             click anywhere outside or hit esc to begin.
