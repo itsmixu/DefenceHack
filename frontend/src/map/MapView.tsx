@@ -24,17 +24,6 @@ import {
 import type { LayerKey } from '../api/types';
 import { TIME_AWARE_LAYERS } from './timeAware';
 
-// Small "Z 13" pill at top-centre — gives the user a constant read on map
-// scale (some layers, briefing analyses, and OpenCelliD have zoom thresholds).
-function ZoomLevelPill() {
-  const zoom = useBboxStore((s) => s.zoom);
-  if (zoom == null) return null;
-  return (
-    <div className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 rounded-md border border-white/20 bg-black/70 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-white/75 shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-sm">
-      Z {zoom.toFixed(0)}
-    </div>
-  );
-}
 
 // Registers the underlying Leaflet map instance into a Zustand store so other
 // components (zone controls, etc.) can call flyTo without prop drilling.
@@ -289,8 +278,6 @@ export default function MapView() {
         </div>
       )}
 
-      {/* Zoom-level pill — always visible at top-center */}
-      <ZoomLevelPill />
 
       {basemapsWithoutData.length > 0 && (
         <div className="pointer-events-none absolute left-1/2 top-12 z-[1000] -translate-x-1/2 rounded-xl border border-amber-300/40 bg-black/85 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-amber-200 shadow-[0_8px_24px_rgba(0,0,0,0.55)] backdrop-blur-sm">
