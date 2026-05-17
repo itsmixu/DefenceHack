@@ -31,15 +31,15 @@ function demoAssetPath(path: string): string {
   return base.endsWith('/') ? `${base}${normalizedPath}` : `${base}/${normalizedPath}`;
 }
 
-/** True when the page is in demo mode (URL flag `?demo=1` or `?demo`). */
+/** True when the page is in demo mode (URL flag `?demo=1`, `?demo`, or forced by build env). */
 export function isDemoMode(): boolean {
   if (cachedActive !== null) return cachedActive;
   if (typeof window === 'undefined') { cachedActive = false; return false; }
   try {
     const params = new URLSearchParams(window.location.search);
-    cachedActive = params.has('demo');
+    cachedActive = params.has('demo') || import.meta.env.VITE_FORCE_DEMO === '1';
   } catch {
-    cachedActive = false;
+    cachedActive = import.meta.env.VITE_FORCE_DEMO === '1';
   }
   return cachedActive;
 }
