@@ -1,51 +1,46 @@
-# Junction x Aalto Defence Hackathon — L1Nx 
+# L1NX — Junction × Aalto Defence Hackathon
+
 ## **61N Challenge**: automate intelligence preparation of the battlespace (IPB) using open-source data.
 
 **L1NX** turns any area of interest into a full operational picture — in seconds. Drop a location, get live terrain analysis, weather intelligence, infrastructure mapping, satellite windows, population data, and automated threat indexing, all fused onto a single interactive map. Built for speed, designed for the field.
 
-<img width="1000" alt="Screenshot From 2026-05-17 11-45-57" src="https://github.com/user-attachments/assets/e4359f46-1e82-43e0-809e-190acf8967cb" />
+🟢 **Live at [l1nx.mikohur.me](https://l1nx.mikohur.me)** — fully wired-up backend, no setup required.
 
+<img width="1000" alt="L1NX screenshot" src="https://github.com/user-attachments/assets/e4359f46-1e82-43e0-809e-190acf8967cb" />
 
-## Quick start
+## Local development
 
-In two terminals:
+Two terminals from the repo root:
 
 ```bash
-# terminal 1 — backend
-# (Python service, scaffolded by the backend owner — see backend/README.md.
-#  Must listen on http://localhost:8000.)
+# terminal 1 — backend (FastAPI on :8000)
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env       # fill in API keys
+uvicorn app.main:app --reload --port 8000
 ```
 
 ```bash
-# terminal 2 — frontend
+# terminal 2 — frontend (Vite on :5173, proxies /api → :8000)
 cd frontend
 npm install
-npm run dev                  # http://localhost:5173
+npm run dev
 ```
 
-## Demo mode (no backend)
+See [`RUNNING.md`](./RUNNING.md) for the API-key list and common issues.
 
-The frontend ships with a preloaded snapshot of central Joensuu so the
-whole tool can run as a static SPA — useful for hackathon judges, video
-demos, or anyone without the backend running.
+## Deployment
 
-- **Use it:** open any deploy of `npm run build` (or `npm run dev`) with
-  the query flag `?demo=1` — e.g. `https://your-site.example/?demo=1`.
-  An amber `DEMO · Joensuu` pill appears at the bottom of the screen.
-- **Refresh the snapshot:** with the backend running locally, run
-  `./scripts/capture-demo-snapshot.sh`. This re-captures all 13 layers
-  and the briefing analyses into `frontend/public/demo/`.
-- **What's stubbed:** collab is disabled, file save/rename/delete are
-  no-ops, and the map is clamped to the captured AO so the user can't
-  pan into empty bbox cells. Everything else (drawing, symbols, ruler,
-  briefing cards, popups) works as in the live app.
+Hosted on [Fly.io](https://fly.io) at [l1nx.mikohur.me](https://l1nx.mikohur.me).
+The FastAPI backend serves the built SPA on the same origin, with a
+persistent volume for the layer cache and saved plans.
 
 ## Data sources
 
 National Land Survey of Finland (MML), Finnish Meteorological Institute
 (FMI), Statistics Finland, Digiroad / Väylä, OpenCelliD, N2YO, and
 OpenStreetMap. Full integration details in `AGENTS.md` §6.
-
 
 ---
 
@@ -93,3 +88,4 @@ Military planning is slow by design — analysts currently spend two to four wee
 | Frontend | TypeScript, React 18, Vite, Leaflet / react-leaflet, Zustand, TanStack Query |
 | Data | MML WFS, FMI WFS/API, Statistics Finland WFS, Digiroad WFS, OpenCelliD, N2YO, OSM Overpass, Celestrak TLE |
 | Collab | Server-Sent Events (SSE) with in-process session registry |
+| Hosting | Fly.io (single VM, ARN region) + persistent volume for cache & plans |

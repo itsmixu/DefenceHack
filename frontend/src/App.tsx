@@ -4,6 +4,7 @@ import SidePanel from './dashboard/SidePanel';
 import FileManagerOverlay from './dashboard/FileManagerOverlay';
 import TopBar from './dashboard/TopBar';
 import Toaster from './dashboard/Toaster';
+import WelcomeModal from './dashboard/WelcomeModal';
 import DebugPanel from './dashboard/DebugPanel';
 import CollabController from './collab/CollabController';
 import DemoBanner from './demo/DemoBanner';
@@ -31,6 +32,7 @@ export default function App() {
       <DebugPanel />
       {!isDemoMode() && <CollabController />}
       <DemoBanner />
+      <WelcomeModal />
     </div>
   );
 }
