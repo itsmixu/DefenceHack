@@ -38,7 +38,7 @@ export default function ZoneControls() {
   const push = useToastStore((s) => s.push);
   const qc = useQueryClient();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
@@ -127,11 +127,11 @@ export default function ZoneControls() {
   };
 
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 z-[1000] flex flex-col items-start gap-2">
+    <div className="pointer-events-auto absolute bottom-[88px] left-3 z-[1000] flex flex-col items-start gap-2">
       <button
         type="button"
         onClick={handleSaveCurrent}
-        className="flex items-center gap-1.5 rounded border border-white/20 bg-black/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] hover:bg-black"
+        className="flex items-center gap-1.5 rounded-xl border border-white/20 bg-black/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.45)] hover:bg-black"
         title="Save the current viewport as an operation zone and prefetch all sources"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -139,7 +139,7 @@ export default function ZoneControls() {
       </button>
 
       {zones.length > 0 && (
-        <div className="w-72 rounded border border-white/15 bg-black/95 shadow-[0_10px_28px_rgba(0,0,0,0.45)]">
+        <div className="w-72 rounded-xl border border-white/15 bg-black/95 shadow-[0_10px_28px_rgba(0,0,0,0.45)] overflow-hidden">
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}

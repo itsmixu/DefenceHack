@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ClipboardList, Layers, Radar } from 'lucide-react';
+import { BookOpen, ClipboardList, Eye, Radar } from 'lucide-react';
 import LayerToggles from './LayerToggles';
 import DrawnList from './DrawnList';
 import BriefingPanel from './briefing/BriefingPanel';
@@ -13,7 +13,7 @@ import PlansPanel from './PlansPanel';
 type Tab = 'layers' | 'briefing' | 'drawn' | 'plans';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'layers', label: 'Layers', icon: <Layers size={12} /> },
+  { id: 'layers', label: 'View', icon: <Eye size={12} /> },
   { id: 'briefing', label: 'Brief', icon: <Radar size={12} /> },
   { id: 'drawn', label: 'Drawn', icon: <ClipboardList size={12} /> },
   { id: 'plans', label: 'Plans', icon: <BookOpen size={12} /> },
@@ -24,11 +24,6 @@ export default function SidePanel() {
 
   return (
     <div className="flex h-full flex-col border-l text-white" style={{ background: '#131313', borderColor: '#393939' }}>
-      <header className="border-b px-4 py-3" style={{ borderColor: '#393939' }}>
-        <h1 className="font-mono text-[13px] font-black uppercase tracking-[0.18em] text-white">61N IPB Tool</h1>
-        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">DefenceHack — Junction</p>
-      </header>
-
       <nav className="grid grid-cols-4 border-b text-[9px] uppercase tracking-[0.12em]" style={{ borderColor: '#393939' }}>
         {TABS.map((t) => (
           <TabBtn

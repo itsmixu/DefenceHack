@@ -4,6 +4,36 @@ import { useDebugStore, type DebugEntry } from '../lib/debugStore';
 
 type Filter = 'all' | 'errors' | 'slow';
 
+/** Compact trigger button — mounted inline in TopBar's right utility cluster. */
+export function DebugTriggerButton() {
+  const entries = useDebugStore((s) => s.entries);
+  const toggleOpen = useDebugStore((s) => s.toggleOpen);
+  const stats = useMemo(() => {
+    const failed = entries.filter((e) => e.error || (e.status != null && e.status >= 400)).length;
+    const unavailable = entries.filter((e) => e.metaStatus === 'unavailable').length;
+    return { total: entries.length, failed, unavailable };
+  }, [entries]);
+  return (
+    <button
+      type="button"
+      onClick={toggleOpen}
+      className="flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition hover:border-white hover:text-white"
+      style={{ borderColor: '#393939', background: '#1a1a1a' }}
+      title="Network debug — request log"
+    >
+      <Terminal size={11} />
+      <span>net</span>
+      <span className="text-white/45">{stats.total}</span>
+      {stats.failed > 0 && (
+        <span className="rounded bg-red-500/80 px-1 text-[9px] font-bold text-black">{stats.failed}</span>
+      )}
+      {stats.unavailable > 0 && (
+        <span className="rounded bg-amber-300/80 px-1 text-[9px] font-bold text-black">{stats.unavailable}</span>
+      )}
+    </button>
+  );
+}
+
 export default function DebugPanel() {
   const entries = useDebugStore((s) => s.entries);
   const open = useDebugStore((s) => s.open);
@@ -40,31 +70,10 @@ export default function DebugPanel() {
     [entries, selectedId],
   );
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={toggleOpen}
-        className="pointer-events-auto fixed top-3 right-3 z-[1100] flex items-center gap-1.5 rounded border border-white/20 bg-black/90 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.1em] text-white/85 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-sm hover:bg-white/[0.1] hover:text-white"
-        title="Open network debug panel"
-      >
-        <Terminal size={12} />
-        <span>net</span>
-        <span className="font-mono text-white/55">{stats.total}</span>
-        {stats.failed > 0 && (
-          <span className="rounded bg-red-500/80 px-1 text-[9px] font-bold text-black">{stats.failed}</span>
-        )}
-        {stats.unavailable > 0 && (
-          <span className="rounded bg-amber-300/80 px-1 text-[9px] font-bold text-black">
-            {stats.unavailable}
-          </span>
-        )}
-      </button>
-    );
-  }
+  if (!open) return null;
 
   return (
-    <div className="pointer-events-auto fixed top-3 right-3 z-[1100] flex h-[calc(100vh-1.5rem)] w-[344px] flex-col rounded border border-white/15 bg-[#0b0b0b]/95 text-white shadow-[0_18px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+    <div className="pointer-events-auto fixed top-[72px] right-3 z-[1100] flex h-[calc(100vh-5rem)] w-[344px] flex-col rounded border border-white/15 bg-[#0b0b0b]/95 text-white shadow-[0_18px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm">
       <header className="flex items-center justify-between border-b border-white/10 px-2 py-1.5">
         <div className="flex items-center gap-2">
           <Terminal size={12} />

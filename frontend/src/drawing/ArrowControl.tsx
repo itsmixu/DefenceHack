@@ -16,20 +16,19 @@ import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useDrawnStore, useTacticalStore } from '../store';
+import type { ArrowStyle } from '../store';
 import type { DrawnFeature } from '../api/types';
 
-// ── Size table ────────────────────────────────────────────────────────────────
-// [lineWeight (px), headLength (px), headWidth (px)]
-const SIZE_TABLE: [number, number, number][] = [
-  [1.5, 10, 6],
-  [2,   15, 9],
-  [3,   22, 13],
-  [4.5, 32, 19],
-  [7,   46, 28],
-];
+// ── Fixed style params (formerly the "M" size) ────────────────────────────────
+const ARROW_WEIGHT  = 3;
+const ARROW_HEAD_LEN = 22;
+const ARROW_HEAD_WID = 13;
 
-function sizeParams(size: number): [number, number, number] {
-  return SIZE_TABLE[Math.min(Math.max(size - 1, 0), SIZE_TABLE.length - 1)];
+// dashArray + lineCap for each style. Returns { dashArray?, lineCap }.
+function styleDash(style: ArrowStyle): { dashArray?: string; lineCap: L.LineCapShape } {
+  if (style === 'dashed') return { dashArray: '10 6', lineCap: 'butt' };
+  if (style === 'dotted') return { dashArray: '2 5',  lineCap: 'round' };
+  return { lineCap: 'round' };
 }
 
 // ── Arrowhead geometry ────────────────────────────────────────────────────────
@@ -82,6 +81,7 @@ interface ArrowEntry {
   weight: number;
   headLen: number;
   headWid: number;
+  style: ArrowStyle;
   shaft: L.Polyline;
   head: L.Polygon;
   group: L.LayerGroup;
@@ -95,11 +95,14 @@ function makeArrowLayers(
   weight: number,
   headLen: number,
   headWid: number,
+  style: ArrowStyle,
   interactive: boolean,
 ): { shaft: L.Polyline; head: L.Polygon; group: L.LayerGroup } {
+  const dash = styleDash(style);
   const shaft = L.polyline([start, end], {
     color, weight,
-    lineCap: 'round',
+    lineCap: dash.lineCap,
+    dashArray: dash.dashArray,
     interactive,
   });
 
@@ -124,23 +127,32 @@ export default function ArrowControl() {
   const isArrowMode  = useTacticalStore((s) => s.isArrowMode);
   const isDeleteMode = useTacticalStore((s) => s.isDeleteMode);
   const arrowColor   = useTacticalStore((s) => s.arrowColor);
-  const arrowSize    = useTacticalStore((s) => s.arrowSize);
+  const arrowStyle   = useTacticalStore((s) => s.arrowStyle);
   const setArrowMode = useTacticalStore((s) => s.setArrowMode);
 
   // All arrow entries indexed by id — lives as a ref so Leaflet callbacks see latest
-  const arrowsRef    = useRef<Map<string, ArrowEntry>>(new Map());
+  const arrowsRef    = useRef<Map<string, ArrowEntry & { phaseId: number | null }>>(new Map());
+
+  // Apply phase-based opacity to a single arrow entry.
+  const applyArrowOpacity = (
+    entry: { shaft: L.Polyline; head: L.Polygon },
+    opacity: number,
+  ) => {
+    entry.shaft.setStyle({ opacity, fillOpacity: opacity * 0.6 });
+    entry.head.setStyle({ opacity, fillOpacity: opacity });
+  };
   // Ghost layers shown while dragging
   const ghostRef     = useRef<{ shaft: L.Polyline; head: L.Polygon } | null>(null);
   const drawingRef   = useRef(false);
   const startRef     = useRef<L.LatLng | null>(null);
   const colorRef     = useRef(arrowColor);
-  const sizeRef      = useRef(arrowSize);
+  const styleRef     = useRef<ArrowStyle>(arrowStyle);
   const modeRef      = useRef(isArrowMode);
   const deleteModeRef = useRef(isDeleteMode);
 
   // Keep refs in sync with latest Zustand values without re-creating handlers
   colorRef.current      = arrowColor;
-  sizeRef.current       = arrowSize;
+  styleRef.current      = arrowStyle;
   modeRef.current       = isArrowMode;
   deleteModeRef.current = isDeleteMode;
 
@@ -213,12 +225,13 @@ export default function ArrowControl() {
           if (coords.length < 2) return;
           const p = f.properties as Record<string, unknown>;
           const color   = String(p.color   ?? '#ef4444');
-          const weight  = Number(p.weight  ?? 3);
-          const headLen = Number(p.head_len_px ?? 22);
-          const headWid = Number(p.head_wid_px ?? 13);
+          const weight  = Number(p.weight  ?? ARROW_WEIGHT);
+          const headLen = Number(p.head_len_px ?? ARROW_HEAD_LEN);
+          const headWid = Number(p.head_wid_px ?? ARROW_HEAD_WID);
+          const style   = (p.style as ArrowStyle | undefined) ?? 'solid';
           const start = L.latLng(coords[0][1], coords[0][0]);
           const end   = L.latLng(coords[coords.length - 1][1], coords[coords.length - 1][0]);
-          const { shaft, head, group } = makeArrowLayers(map, start, end, color, weight, headLen, headWid, true);
+          const { shaft, head, group } = makeArrowLayers(map, start, end, color, weight, headLen, headWid, style, true);
           group.on('click', (ev) => {
             L.DomEvent.stop(ev as L.LeafletMouseEvent);
             if (deleteModeRef.current) {
@@ -226,7 +239,7 @@ export default function ArrowControl() {
             }
           });
           group.addTo(map);
-          arrowsRef.current.set(id, { id, startLatLng: start, endLatLng: end, color, weight, headLen, headWid, shaft, head, group });
+          arrowsRef.current.set(id, { id, startLatLng: start, endLatLng: end, color, weight, headLen, headWid, style, shaft, head, group });
         });
 
       // Full clear
@@ -260,6 +273,8 @@ export default function ArrowControl() {
       // In delete mode, suppress drawing interactions
       if (deleteModeRef.current) return;
       if (!modeRef.current) return;
+      // No phase selected → drawing disabled
+      if (useTacticalStore.getState().selectedPhaseId == null) return;
       // Only left button
       if (e.button !== 0) return;
       e.stopPropagation();
@@ -270,10 +285,11 @@ export default function ArrowControl() {
       map.dragging.disable();
 
       // Create ghost layers
-      const [weight, headLen, headWid] = sizeParams(sizeRef.current);
+      const dash = styleDash(styleRef.current);
       const ghostShaft = L.polyline([startRef.current, startRef.current], {
-        color: colorRef.current, weight,
-        lineCap: 'round', interactive: false, opacity: 0.65,
+        color: colorRef.current, weight: ARROW_WEIGHT,
+        lineCap: dash.lineCap, dashArray: dash.dashArray,
+        interactive: false, opacity: 0.65,
       }).addTo(map);
       const ghostHead = L.polygon([], {
         color: colorRef.current,
@@ -287,10 +303,9 @@ export default function ArrowControl() {
     function onMouseMove(e: MouseEvent) {
       if (!drawingRef.current || !startRef.current || !ghostRef.current) return;
       const end = getLatLng(e.clientX, e.clientY);
-      const [, headLen, headWid] = sizeParams(sizeRef.current);
 
       ghostRef.current.shaft.setLatLngs([startRef.current, end]);
-      const pts = arrowheadPoints(map, startRef.current, end, headLen, headWid);
+      const pts = arrowheadPoints(map, startRef.current, end, ARROW_HEAD_LEN, ARROW_HEAD_WID);
       if (pts.length) ghostRef.current.head.setLatLngs(pts);
     }
 
@@ -310,13 +325,16 @@ export default function ArrowControl() {
       const dist = Math.sqrt((pEnd.x - pStart.x) ** 2 + (pEnd.y - pStart.y) ** 2);
       if (dist < 8) return;
 
-      const [weight, headLen, headWid] = sizeParams(sizeRef.current);
+      const weight = ARROW_WEIGHT;
+      const headLen = ARROW_HEAD_LEN;
+      const headWid = ARROW_HEAD_WID;
+      const style = styleRef.current;
       const color = colorRef.current;
       const id = `arrow-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
       // Build permanent arrow
       const { shaft, head, group } = makeArrowLayers(
-        map, start, end, color, weight, headLen, headWid, true,
+        map, start, end, color, weight, headLen, headWid, style, true,
       );
 
       // Click on arrow → delete mode removes immediately, otherwise show popup
@@ -348,12 +366,15 @@ export default function ArrowControl() {
 
       group.addTo(map);
 
-      const entry: ArrowEntry = {
+      const phaseId = useTacticalStore.getState().selectedPhaseId;
+      const entry: ArrowEntry & { phaseId: number | null } = {
         id, startLatLng: start, endLatLng: end,
-        color, weight, headLen, headWid,
-        shaft, head, group,
+        color, weight, headLen, headWid, style,
+        shaft, head, group, phaseId,
       };
       arrowsRef.current.set(id, entry);
+      // Newly drawn arrows are always for the selected phase → opacity 1
+      applyArrowOpacity(entry, 1);
 
       // Persist to drawn store as a LineString feature
       const feature: DrawnFeature = {
@@ -372,7 +393,8 @@ export default function ArrowControl() {
           weight,
           head_len_px: headLen,
           head_wid_px: headWid,
-          size: sizeRef.current,
+          style,
+          phaseId,
         },
       };
       useDrawnStore.getState().addFeature(feature);

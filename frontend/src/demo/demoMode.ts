@@ -25,6 +25,12 @@ export interface DemoManifest {
 
 let manifest: DemoManifest | null = null;
 
+function demoAssetPath(path: string): string {
+  const base = import.meta.env.BASE_URL;
+  const normalizedPath = path.replace(/^\//, '');
+  return base.endsWith('/') ? `${base}${normalizedPath}` : `${base}/${normalizedPath}`;
+}
+
 /** True when the page is in demo mode (URL flag `?demo=1` or `?demo`). */
 export function isDemoMode(): boolean {
   if (cachedActive !== null) return cachedActive;
@@ -52,7 +58,7 @@ export async function installDemoFetch(): Promise<void> {
 
   // Preload the manifest so the banner / map can read it synchronously.
   try {
-    const r = await fetch('/demo/manifest.json');
+    const r = await fetch(demoAssetPath('demo/manifest.json'));
     if (r.ok) manifest = (await r.json()) as DemoManifest;
   } catch {
     /* leave manifest null — banner falls back to generic copy */
@@ -97,18 +103,18 @@ async function handleDemo(
   if (path === '/api/health') return json({ status: 'ok', mode: 'demo' });
 
   // ── Sources / capabilities — static snapshots ─────────────────────────
-  if (path === '/api/sources')                 return staticFile(originalFetch, '/demo/sources.json');
-  if (path === '/api/timeline/capabilities')   return staticFile(originalFetch, '/demo/timeline-capabilities.json');
+  if (path === '/api/sources')                 return staticFile(originalFetch, demoAssetPath('demo/sources.json'));
+  if (path === '/api/timeline/capabilities')   return staticFile(originalFetch, demoAssetPath('demo/timeline-capabilities.json'));
 
   // ── Layer fetches: /api/layers/{layer} or /api/analyze/mcoo ───────────
   const layerMatch = path.match(/^\/api\/layers\/([\w_-]+)$/);
-  if (layerMatch) return staticFile(originalFetch, `/demo/layers/${layerMatch[1]}.json`);
-  if (path === '/api/analyze/mcoo')            return staticFile(originalFetch, '/demo/layers/mcoo.json');
+  if (layerMatch) return staticFile(originalFetch, demoAssetPath(`demo/layers/${layerMatch[1]}.json`));
+  if (path === '/api/analyze/mcoo')            return staticFile(originalFetch, demoAssetPath('demo/layers/mcoo.json'));
 
   // ── Briefing analyses ─────────────────────────────────────────────────
-  if (path === '/api/analyze/terrain-effects')  return staticFile(originalFetch, '/demo/analyze/terrain-effects.json');
-  if (path === '/api/analyze/drone-conditions') return staticFile(originalFetch, '/demo/analyze/drone-conditions.json');
-  if (path === '/api/analyze/astronomical')     return staticFile(originalFetch, '/demo/analyze/astronomical.json');
+  if (path === '/api/analyze/terrain-effects')  return staticFile(originalFetch, demoAssetPath('demo/analyze/terrain-effects.json'));
+  if (path === '/api/analyze/drone-conditions') return staticFile(originalFetch, demoAssetPath('demo/analyze/drone-conditions.json'));
+  if (path === '/api/analyze/astronomical')     return staticFile(originalFetch, demoAssetPath('demo/analyze/astronomical.json'));
 
   // ── Filesystem — stubbed; demo doesn't persist files ──────────────────
   if (path === '/api/fs/tree')   return json({ folders: [], files: [] });

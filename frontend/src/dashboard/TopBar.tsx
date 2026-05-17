@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Crown, Eye } from 'lucide-react';
 import { useCollabStore, useToastStore } from '../store';
 import { collabApi } from '../api/collab';
+import { DebugTriggerButton } from './DebugPanel';
 
 type TopTab = 'plan' | 'history';
 
@@ -114,6 +115,9 @@ export default function TopBar() {
             {peerCount > 0 ? `${peerCount} IN SESSION` : 'NO FILE OPEN'}
           </div>
         )}
+
+        {/* Network debug trigger — opens the request log overlay */}
+        <DebugTriggerButton />
 
         {/* Primary action */}
         <button

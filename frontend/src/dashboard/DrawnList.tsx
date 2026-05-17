@@ -78,13 +78,16 @@ export default function DrawnList() {
           <ul className="space-y-1">
             {arrows.map((f) => {
               const p = f.properties as {
-                color?: string; size?: number; weight?: number;
+                color?: string; style?: 'solid' | 'dashed' | 'dotted'; weight?: number;
               };
               const color  = p.color  ?? '#ef4444';
-              const size   = p.size   ?? 3;
+              const style  = p.style  ?? 'solid';
               const weight = p.weight ?? 3;
-              const sizes  = ['XS', 'S', 'M', 'L', 'XL'];
-              const sizeLabel = sizes[Math.min(size - 1, sizes.length - 1)];
+              const dashArray =
+                style === 'dashed' ? '6 3'
+                : style === 'dotted' ? '1.5 3'
+                : undefined;
+              const lineCap = style === 'dashed' ? 'butt' : 'round';
 
               return (
                 <li
@@ -101,15 +104,16 @@ export default function DrawnList() {
                     <line x1="2" y1="7" x2="28" y2="7"
                       stroke={color}
                       strokeWidth={Math.max(1, weight * 0.7)}
+                      strokeDasharray={dashArray}
+                      strokeLinecap={lineCap}
                       markerEnd={`url(#ah-${f.id})`}
-                      strokeLinecap="round"
                     />
                   </svg>
 
                   <div className="min-w-0 flex-1">
                     <div className="font-mono text-[10px] font-semibold text-white/85">Arrow</div>
                     <div className="font-mono text-[9px] text-white/40">
-                      size {sizeLabel}
+                      {style}
                     </div>
                   </div>
 

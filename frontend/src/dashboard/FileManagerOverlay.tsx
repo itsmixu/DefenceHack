@@ -182,6 +182,36 @@ function loadPhaseIntoLiveInner(ph: Phase) {
   }
 }
 
+// ── Phase rename input (compact pill that mirrors phase tile size) ───────────
+
+function PhaseRenameInput({ initial, color, onCommit, onCancel }: {
+  initial: string;
+  color: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [val, setVal] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  return (
+    <input
+      ref={ref}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={() => onCommit(val)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(val);
+        if (e.key === 'Escape') onCancel();
+        e.stopPropagation();
+      }}
+      onClick={(e) => e.stopPropagation()}
+      maxLength={20}
+      className="w-24 rounded-md border bg-[#0e0e0e] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white outline-none"
+      style={{ borderColor: color }}
+    />
+  );
+}
+
 // ── Inline rename ─────────────────────────────────────────────────────────────
 
 function InlineRename({ initial, onConfirm, onCancel }: {
@@ -552,6 +582,7 @@ export default function FileManagerOverlay() {
   const [showHierarchyEditor, setShowHierarchyEditor] = useState(false);
   const [newFolderParent, setNewFolderParent] = useState<string | null | undefined>(undefined);
   const [newFolderName, setNewFolderName]     = useState('');
+  const [renamingPhaseId, setRenamingPhaseId] = useState<number | null>(null);
 
   // Save form state ──────────────────────────────────────────────────────────
   const [saveName, setSaveName]               = useState('');
@@ -658,6 +689,58 @@ export default function FileManagerOverlay() {
     const newPhase = useOpenFilesStore.getState().setTabPhase(activeTab.id, newPhaseId, live);
     if (newPhase) loadPhaseIntoLive(newPhase);
   }, [activeTab]);
+
+  // ── Add a new (empty) phase to the active tab ────────────────────────────
+  const handleAddPhase = useCallback(() => {
+    if (!activeTab) return;
+    if (activeTab.phases.length >= 6) {
+      push('error', 'Maximum 6 phases per mission');
+      return;
+    }
+    // Pick the lowest-unused id in 1..6 so deleted slots can be reused.
+    const used = new Set(activeTab.phases.map((p) => p.id));
+    let newId = 1;
+    while (used.has(newId)) newId += 1;
+    const newPhase = makeEmptyPhase(newId);
+    useOpenFilesStore.getState().patchTab(activeTab.id, {
+      phases: [...activeTab.phases, newPhase],
+      isDirty: true,
+    });
+    push('info', `Added ${newPhase.name}`);
+  }, [activeTab, push]);
+
+  // ── Rename a phase in place ──────────────────────────────────────────────
+  const handleRenamePhase = useCallback((phaseId: number, newName: string) => {
+    if (!activeTab) return;
+    const trimmed = newName.trim();
+    setRenamingPhaseId(null);
+    if (!trimmed) return;
+    useOpenFilesStore.getState().patchTab(activeTab.id, {
+      phases: activeTab.phases.map((p) =>
+        p.id === phaseId ? { ...p, name: trimmed } : p,
+      ),
+      isDirty: true,
+    });
+  }, [activeTab]);
+
+  // ── Delete a phase (cannot delete the only phase or the active one) ──────
+  const handleDeletePhase = useCallback((phaseId: number) => {
+    if (!activeTab) return;
+    if (activeTab.phases.length <= 1) {
+      push('error', 'A mission must have at least one phase');
+      return;
+    }
+    if (phaseId === activeTab.activePhaseId) {
+      push('error', 'Switch to another phase before deleting this one');
+      return;
+    }
+    const target = activeTab.phases.find((p) => p.id === phaseId);
+    useOpenFilesStore.getState().patchTab(activeTab.id, {
+      phases: activeTab.phases.filter((p) => p.id !== phaseId),
+      isDirty: true,
+    });
+    if (target) push('info', `Deleted ${target.name}`);
+  }, [activeTab, push]);
 
   // ── Snapshot ─────────────────────────────────────────────────────────────
   const handleSnapshot = useCallback(() => {
@@ -931,12 +1014,12 @@ export default function FileManagerOverlay() {
   }, [tabs, activeTab]);
 
   return (
-    <div className="pointer-events-auto absolute left-3 top-[76px] z-[900] flex flex-col gap-1" style={{ width: 360 }}>
+    <div className="pointer-events-auto absolute left-3 top-3 z-[900] flex flex-col gap-1" style={{ width: 360 }}>
       <input ref={importRef} type="file" accept=".json,.ipb.json" className="hidden" onChange={handleImportFile} />
 
       {/* ── Header bar with tabs ───────────────────────────────────────────── */}
       <div
-        className="flex items-stretch gap-0 rounded-sm border shadow-[0_4px_16px_rgba(0,0,0,0.7)]"
+        className="flex items-stretch gap-0 rounded-xl border shadow-[0_4px_16px_rgba(0,0,0,0.7)] overflow-hidden"
         style={{ background: '#131313', borderColor: open ? '#fff' : '#393939' }}
       >
         {/* Files toggle */}
@@ -1057,35 +1140,71 @@ export default function FileManagerOverlay() {
         </div>
       )}
 
-      {/* ── Phase switcher (when active tab has more than one phase) ──────── */}
-      {activeTab && activeTab.phases.length > 1 && (
+      {/* ── Phase switcher — always visible while a file is open ─────────── */}
+      {activeTab && (
         <div
-          className="rounded-sm border px-2 py-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+          className="rounded-xl border px-2 py-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
           style={{ background: '#0e0e0e', borderColor: '#393939' }}
         >
           <div className="mb-1 flex items-center gap-1.5">
             <Layers size={9} className="text-white/30" />
-            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/30">Phases</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/30">
+              Phases — drawings, layers & symbols are scoped per phase
+            </span>
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {activeTab.phases.map((ph) => {
               const isActive = ph.id === activeTab.activePhaseId;
+              const phaseColor = ph.color ?? '#3b82f6';
+              const isRenaming = renamingPhaseId === ph.id;
+              if (isRenaming) {
+                return (
+                  <PhaseRenameInput
+                    key={ph.id}
+                    initial={ph.name}
+                    color={phaseColor}
+                    onCommit={(name) => handleRenamePhase(ph.id, name)}
+                    onCancel={() => setRenamingPhaseId(null)}
+                  />
+                );
+              }
               return (
-                <button
-                  key={ph.id}
-                  onClick={() => handleSwitchPhase(ph.id)}
-                  className="rounded-sm border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition"
-                  style={{
-                    borderColor: isActive ? ph.color ?? '#3b82f6' : '#393939',
-                    background: isActive ? (ph.color ?? '#3b82f6') + '20' : 'transparent',
-                    color: isActive ? ph.color ?? '#3b82f6' : 'rgba(255,255,255,0.40)',
-                    fontWeight: isActive ? 700 : 400,
-                  }}
-                >
-                  {ph.name}
-                </button>
+                <div key={ph.id} className="group relative">
+                  <button
+                    onClick={() => handleSwitchPhase(ph.id)}
+                    onDoubleClick={() => setRenamingPhaseId(ph.id)}
+                    title="Click to switch · double-click to rename"
+                    className="rounded-md border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] transition"
+                    style={{
+                      borderColor: isActive ? phaseColor : '#393939',
+                      background: isActive ? phaseColor + '22' : 'transparent',
+                      color: isActive ? phaseColor : 'rgba(255,255,255,0.45)',
+                      fontWeight: isActive ? 700 : 400,
+                    }}
+                  >
+                    {ph.name}
+                  </button>
+                  {!isActive && activeTab.phases.length > 1 && (
+                    <button
+                      onClick={() => handleDeletePhase(ph.id)}
+                      title={`Delete ${ph.name}`}
+                      className="absolute -right-1 -top-1 hidden h-3.5 w-3.5 items-center justify-center rounded-full border border-red-400/60 bg-[#0e0e0e] text-[8px] font-bold text-red-300 hover:bg-red-500 hover:text-white group-hover:flex"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               );
             })}
+            {activeTab.phases.length < 6 && (
+              <button
+                onClick={handleAddPhase}
+                title="Add a new phase"
+                className="flex h-[26px] items-center gap-1 rounded-md border border-dashed border-white/25 px-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/50 transition hover:border-white hover:text-white"
+              >
+                + phase
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1156,7 +1275,7 @@ export default function FileManagerOverlay() {
       {/* ── Expanded panel ──────────────────────────────────────────────────── */}
       {open && (
         <div
-          className="flex flex-col overflow-hidden rounded-sm border shadow-[0_8px_32px_rgba(0,0,0,0.8)]"
+          className="flex flex-col overflow-hidden rounded-xl border shadow-[0_8px_32px_rgba(0,0,0,0.8)]"
           style={{ background: '#131313', borderColor: '#393939', maxHeight: '60vh' }}
         >
           {/* Sub-toolbar */}

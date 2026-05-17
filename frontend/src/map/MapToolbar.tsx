@@ -20,7 +20,7 @@ import {
   MoveUpRight, Shield, Shapes, Eraser, X, Search, Ruler,
 } from 'lucide-react';
 import { useTacticalStore, MILITARY_FEATURE_TYPES } from '../store';
-import type { MilitaryFeatureType } from '../store';
+import type { MilitaryFeatureType, ArrowStyle } from '../store';
 import { SYMBOL_LIBRARY, SYMBOL_CATEGORIES } from './symbols/library';
 import type { SymbolCategory, MilSymbol } from './symbols/library';
 import type { ActiveMapTool } from '../store';
@@ -35,7 +35,11 @@ const ARROW_COLORS = [
   { hex: '#a855f7', label: 'Purple' },
   { hex: '#f97316', label: 'Orange' },
 ];
-const ARROW_SIZE_LABELS = ['XS', 'S', 'M', 'L', 'XL'];
+const ARROW_STYLES: { value: ArrowStyle; label: string; dashArray?: string }[] = [
+  { value: 'solid',  label: 'Solid'  },
+  { value: 'dashed', label: 'Dashed', dashArray: '10 6' },
+  { value: 'dotted', label: 'Dotted', dashArray: '2 5'  },
+];
 
 // ── Category badge colours ─────────────────────────────────────────────────────
 const CAT_COLOR: Record<SymbolCategory, string> = {
@@ -106,10 +110,12 @@ function EmptyUnitFrame({ size = 32 }: { size?: number }) {
 // ── Arrow panel ────────────────────────────────────────────────────────────────
 function ArrowPanel() {
   const arrowColor    = useTacticalStore((s) => s.arrowColor);
-  const arrowSize     = useTacticalStore((s) => s.arrowSize);
+  const arrowStyle    = useTacticalStore((s) => s.arrowStyle);
   const isArrowMode   = useTacticalStore((s) => s.isArrowMode);
   const setArrowColor = useTacticalStore((s) => s.setArrowColor);
-  const setArrowSize  = useTacticalStore((s) => s.setArrowSize);
+  const setArrowStyle = useTacticalStore((s) => s.setArrowStyle);
+  const previewDash   = ARROW_STYLES.find((s) => s.value === arrowStyle)?.dashArray;
+  const previewCap    = arrowStyle === 'dotted' ? 'round' : (arrowStyle === 'dashed' ? 'butt' : 'round');
 
   return (
     <div className="space-y-3 p-3">
@@ -148,18 +154,17 @@ function ArrowPanel() {
         </div>
       </div>
 
-      {/* Size + preview */}
+      {/* Style + preview */}
       <div>
-        <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-white/35">Size</p>
+        <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-white/35">Style</p>
         <div className="flex gap-1.5">
-          {ARROW_SIZE_LABELS.map((label, i) => {
-            const s = i + 1;
-            const active = arrowSize === s;
+          {ARROW_STYLES.map(({ value, label }) => {
+            const active = arrowStyle === value;
             return (
               <button
-                key={s}
-                onClick={() => setArrowSize(s)}
-                className="flex-1 rounded-sm border py-1 font-mono text-[9px] transition"
+                key={value}
+                onClick={() => setArrowStyle(value)}
+                className="flex-1 rounded-sm border py-1 font-mono text-[9px] uppercase tracking-[0.08em] transition"
                 style={{
                   borderColor: active ? '#fff' : '#393939',
                   background: active ? '#fff' : '#1a1a1a',
@@ -181,9 +186,10 @@ function ArrowPanel() {
           </defs>
           <line x1="8" y1="9" x2="90%" y2="9"
             stroke={arrowColor}
-            strokeWidth={Math.max(1, (arrowSize - 1) * 1.4 + 1.5)}
+            strokeWidth={3}
+            strokeDasharray={previewDash}
+            strokeLinecap={previewCap}
             markerEnd="url(#tb-arrow-prev)"
-            strokeLinecap="round"
           />
         </svg>
       </div>
@@ -481,7 +487,7 @@ function ToolBtn({ icon, label, active, danger = false, onClick }: ToolBtnProps)
     <button
       onClick={onClick}
       title={label}
-      className="flex flex-col items-center gap-0.5 rounded-sm border px-3 py-2 transition-all"
+      className="flex flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all"
       style={{
         borderColor: active ? activeBorder : '#393939',
         background:  active ? activeBg : '#131313',
@@ -525,12 +531,12 @@ export default function MapToolbar() {
 
   return (
     <div
-      className="pointer-events-auto absolute bottom-6 left-1/2 z-[1000] flex -translate-x-1/2 flex-col items-center gap-2"
+      className="pointer-events-auto absolute bottom-[88px] right-6 z-[1000] flex flex-col items-end gap-2"
     >
       {/* Delete mode banner — shown above everything */}
       {isDeleteMode && (
         <div
-          className="flex items-center gap-2 rounded-sm border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white"
+          className="flex items-center gap-2 rounded-lg border px-3 py-1.5 font-mono text-[10px] uppercase tracking-wide text-white"
           style={{ background: '#ef4444', borderColor: '#ef4444', width: panelWidth || 'auto', minWidth: 300 }}
         >
           <Eraser size={12} />
@@ -541,7 +547,7 @@ export default function MapToolbar() {
       {/* Panel shown above toolbar when a tool is active */}
       {openPanel && (
         <div
-          className="rounded-sm border shadow-[0_8px_32px_rgba(0,0,0,0.8)]"
+          className="rounded-xl border shadow-[0_8px_32px_rgba(0,0,0,0.8)] overflow-hidden"
           style={{
             width: panelWidth,
             maxHeight: 480,
@@ -577,7 +583,7 @@ export default function MapToolbar() {
 
       {/* Toolbar — solid Tactile Noir bar */}
       <div
-        className="flex items-center gap-px rounded-sm border shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
+        className="flex items-center gap-1 rounded-xl border p-1 shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
         style={{ background: '#131313', borderColor: '#393939' }}
       >
         {/* Divider helper: wrap buttons in a container with right border */}
@@ -590,7 +596,7 @@ export default function MapToolbar() {
               onClick={() => toggleTool('arrow')}
             />
           </div>
-          <div className="h-8 w-px" style={{ background: '#393939' }} />
+          
         </div>
 
         <div className="flex items-center">
@@ -602,7 +608,7 @@ export default function MapToolbar() {
               onClick={() => toggleTool('ruler')}
             />
           </div>
-          <div className="h-8 w-px" style={{ background: '#393939' }} />
+          
         </div>
 
         <div className="flex items-center">
@@ -626,7 +632,7 @@ export default function MapToolbar() {
               onClick={() => toggleTool('symbol')}
             />
           </div>
-          <div className="h-8 w-px" style={{ background: '#393939' }} />
+          
         </div>
 
         <div className="flex items-center">
@@ -638,7 +644,7 @@ export default function MapToolbar() {
               onClick={() => toggleTool('shape')}
             />
           </div>
-          <div className="h-8 w-px" style={{ background: '#393939' }} />
+          
         </div>
 
         <div className="px-1">

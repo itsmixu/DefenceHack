@@ -134,6 +134,23 @@ export default function MapView() {
     [loadingBasemapIds],
   );
 
+  // ── No-data warning ─────────────────────────────────────────────────────────
+  // For each enabled, time-aware basemap, check whether the committed timeline
+  // moment is outside its data window (older than minDate, or fresher than
+  // lagHours behind now). Show a top-center banner naming the offending layers.
+  const basemapsWithoutData = useMemo(() => {
+    const offending: string[] = [];
+    for (const b of activeBasemapList) {
+      if (!b.timeAware) continue;
+      const earliest = b.minDate ? Date.parse(b.minDate) : -Infinity;
+      const latest   = b.maxDate ? Date.parse(b.maxDate)
+                    : b.lagHours != null ? Date.now() - b.lagHours * 3_600_000
+                    : Infinity;
+      if (committedMs < earliest || committedMs > latest) offending.push(b.label);
+    }
+    return offending;
+  }, [activeBasemapList, committedMs]);
+
   const toggleBasemap = (id: string) => {
     setEnabledBasemaps((prev) => {
       const currentlyEnabled = !!prev[id];
@@ -174,6 +191,7 @@ export default function MapView() {
         center={initialCenter}
         zoom={initialZoom}
         minZoom={4}
+        zoomControl={false}
         // Hard-clamp panning. In normal mode this is all of Finland; in demo
         // mode it's a small ring around the captured AO so all data is in view.
         maxBounds={maxBounds}
@@ -248,6 +266,12 @@ export default function MapView() {
         </div>
       )}
 
+      {basemapsWithoutData.length > 0 && (
+        <div className="pointer-events-none absolute left-1/2 top-3 z-[1000] -translate-x-1/2 rounded-xl border border-amber-300/40 bg-black/85 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-amber-200 shadow-[0_8px_24px_rgba(0,0,0,0.55)] backdrop-blur-sm">
+          No map data for selected time · {basemapsWithoutData.join(', ')}
+        </div>
+      )}
+
       {backendUnavailable && (
         <div className="pointer-events-none absolute left-1/2 top-36 z-[1000] -translate-x-1/2 rounded border border-red-300/40 bg-black/85 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-200 shadow-[0_10px_26px_rgba(0,0,0,0.6)] backdrop-blur-sm">
           Backend offline — start backend on port 8000.
@@ -255,7 +279,7 @@ export default function MapView() {
         </div>
       )}
 
-      <div className="pointer-events-auto absolute right-3 top-[76px] z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
+      <div className="pointer-events-auto absolute right-3 top-3 z-[1000] flex flex-col gap-2 rounded-xl border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
         <button
           type="button"
           onClick={() => setBasemapPanelOpen((s) => !s)}
@@ -302,7 +326,7 @@ export default function MapView() {
           })}
       </div>
 
-      <div className="pointer-events-auto absolute left-1/2 top-3 z-[1000] w-[min(96vw,920px)] -translate-x-1/2 rounded-lg border border-white/15 bg-[#0b0b0b]/95 px-3 py-2 text-white shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm">
+      <div className="pointer-events-auto absolute bottom-3 left-3 right-3 z-[1000] rounded-xl border border-white/15 bg-[#0b0b0b]/95 px-3 py-2 text-white shadow-[0_10px_28px_rgba(0,0,0,0.55)] backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <label className="flex shrink-0 flex-col gap-0.5">
             <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-white/55">Start</span>

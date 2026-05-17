@@ -39,10 +39,6 @@ export default function SourceStatusList() {
 
   return (
     <div>
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
-        Live status per data source for the current viewport. Judging
-        criterion: transparency about what's available.
-      </p>
       <ul className="space-y-2">
         {data.map((s) => {
           const st = status[s.id as LayerKey];

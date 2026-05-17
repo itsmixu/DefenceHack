@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import TerrainEffectsCard from './TerrainEffectsCard';
-import WeatherCard from './WeatherCard';
 import DroneConditionsCard from './DroneConditionsCard';
 import AstronomyCard from './AstronomyCard';
 import SatellitesCard from './SatellitesCard';
@@ -10,7 +9,7 @@ import { useBboxStore, useTimelineStore } from '../../store';
 // viewport bbox covers most of Finland, the responses balloon, and rendering
 // them in a single render pass can crash the tab. Gate everything until the
 // user is zoomed in enough that the analysis is bounded.
-const BRIEFING_MIN_ZOOM = 9;
+const BRIEFING_MIN_ZOOM = 11;
 
 const fmtSliderTime = (ms: number): string => {
   const d = new Date(ms);
@@ -47,10 +46,7 @@ export default function BriefingPanel() {
                 : 'live'}
         </div>
       </section>
-      <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
-        Doctrinal IPB products fused from raw layers. All ratings cite ATP 2-41.1
-        Appendix B where applicable.
-      </p>
+
 
       {zoomedOut ? (
         <section className="rounded border border-amber-300/30 bg-amber-500/[0.06] px-3 py-3">
@@ -66,10 +62,9 @@ export default function BriefingPanel() {
       ) : (
         <>
           <TerrainEffectsCard />
-          <WeatherCard />
           <DroneConditionsCard />
-          <AstronomyCard />
           <SatellitesCard />
+          <AstronomyCard />
         </>
       )}
     </div>

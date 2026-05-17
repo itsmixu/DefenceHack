@@ -207,14 +207,15 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
 
     if (layer === 'osm') {
       const meta = getOsmPoiMeta(String(p.category ?? ''));
-      const icon = meta?.icon ?? '•';
+      const icon = meta?.icon ?? '<span style="font-size:10px;font-weight:700">•</span>';
       const iconColor = meta?.color ?? '#ef4444';
-      const size = Math.round(20 * scale);
+      const size = Math.round(22 * scale);
       const half = Math.round(size / 2);
-      const fontSize = Math.max(8, Math.round(12 * scale));
       const marker = L.divIcon({
         className: '',
-        html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:#fff;border:2px solid ${iconColor};display:flex;align-items:center;justify-content:center;font-size:${fontSize}px;line-height:1">${icon}</div>`,
+        // The icon SVG uses stroke="currentColor" — setting `color: iconColor`
+        // on the wrapper colours the icon to match the POI's brand colour.
+        html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:#fff;border:2px solid ${iconColor};display:flex;align-items:center;justify-content:center;color:${iconColor};line-height:0">${icon}</div>`,
         iconSize: [size, size],
         iconAnchor: [half, half],
         popupAnchor: [0, -half],
@@ -277,12 +278,23 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
       const p = props as Record<string, unknown>;
       const category = String(p.category ?? 'unknown');
       const meta = getOsmPoiMeta(category);
-      const name = String(p.name ?? 'Unnamed POI');
+      const categoryLabel = meta?.label ?? category;
+      const rawName = p.name ? String(p.name) : '';
+      const hasName = rawName.trim().length > 0;
       const operator = p.operator ? `<div><span style="color:#64748b">operator</span>: <strong>${formatValue(p.operator)}</strong></div>` : '';
-      const html = `
+      // If the POI has no name, just show the category as the title. No need
+      // for "Unnamed POI" + a separate category row — redundant for the user.
+      const html = hasName
+        ? `
         <div style="font-size:11px;line-height:1.4;min-width:180px">
-          <div style="font-weight:700;margin-bottom:2px">${meta?.icon ?? '•'} ${name}</div>
-          <div><span style="color:#64748b">category</span>: <strong>${meta?.label ?? category}</strong></div>
+          <div style="font-weight:700;margin-bottom:2px">${rawName}</div>
+          <div><span style="color:#64748b">category</span>: <strong>${categoryLabel}</strong></div>
+          ${operator}
+        </div>
+      `
+        : `
+        <div style="font-size:11px;line-height:1.4;min-width:120px">
+          <div style="font-weight:700">${categoryLabel}</div>
           ${operator}
         </div>
       `;
