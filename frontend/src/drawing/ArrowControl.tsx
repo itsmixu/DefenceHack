@@ -177,7 +177,7 @@ export default function ArrowControl() {
     return () => { map.off('zoomend', onZoomEnd); };
   }, [map]);
 
-  // ── Sync deletions from DrawnList ──────────────────────────────────────────
+  // ── Sync additions + deletions from store (covers collab remote edits) ───────
   useEffect(() => {
     return useDrawnStore.subscribe((state, prev) => {
       const prevIds = new Set(
@@ -190,6 +190,7 @@ export default function ArrowControl() {
           .filter((f) => f.properties?.feature_type === 'ARROW')
           .map((f) => String(f.id)),
       );
+
       // Remove Leaflet layers for any arrow deleted from store
       prevIds.forEach((id) => {
         if (!currIds.has(id)) {
@@ -200,13 +201,41 @@ export default function ArrowControl() {
           }
         }
       });
-      // If all features cleared, wipe everything
+
+      // Render arrows that appeared remotely (collab broadcast / file open)
+      state.features
+        .filter((f) => f.properties?.feature_type === 'ARROW')
+        .forEach((f) => {
+          const id = String(f.id);
+          if (arrowsRef.current.has(id)) return;
+          if (f.geometry.type !== 'LineString') return;
+          const coords = (f.geometry as GeoJSON.LineString).coordinates;
+          if (coords.length < 2) return;
+          const p = f.properties as Record<string, unknown>;
+          const color   = String(p.color   ?? '#ef4444');
+          const weight  = Number(p.weight  ?? 3);
+          const headLen = Number(p.head_len_px ?? 22);
+          const headWid = Number(p.head_wid_px ?? 13);
+          const start = L.latLng(coords[0][1], coords[0][0]);
+          const end   = L.latLng(coords[coords.length - 1][1], coords[coords.length - 1][0]);
+          const { shaft, head, group } = makeArrowLayers(map, start, end, color, weight, headLen, headWid, true);
+          group.on('click', (ev) => {
+            L.DomEvent.stop(ev as L.LeafletMouseEvent);
+            if (deleteModeRef.current) {
+              useDrawnStore.getState().removeFeature(id);
+            }
+          });
+          group.addTo(map);
+          arrowsRef.current.set(id, { id, startLatLng: start, endLatLng: end, color, weight, headLen, headWid, shaft, head, group });
+        });
+
+      // Full clear
       if (state.features.length === 0 && prev.features.length > 0) {
         arrowsRef.current.forEach((e) => e.group.remove());
         arrowsRef.current.clear();
       }
     });
-  }, []);
+  }, [map]);
 
   // ── Main draw handlers ─────────────────────────────────────────────────────
   useEffect(() => {

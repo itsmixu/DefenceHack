@@ -43,7 +43,7 @@ export default function TopBar() {
       style={{ background: '#131313', borderBottom: '1px solid #393939' }}
     >
       {/* Brand */}
-      <div className="text-xl font-black tracking-tighter text-white">LINX</div>
+      <div className="text-xl font-black tracking-tighter text-white">L1NX</div>
 
       {/* Tabs */}
       <div className="flex items-center gap-10 font-mono text-[11px] tracking-[0.2em]">

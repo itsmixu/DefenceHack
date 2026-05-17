@@ -740,6 +740,84 @@ export function getStyleForLayer(layer: LayerKey, zoom?: number | null): GeoJSON
       return;
     }
 
+    if (layer === 'exposure') {
+      const p = props as Record<string, unknown>;
+      const level       = Math.round(Number(p.danger_level ?? 0));
+      const terrainType = String(p.terrain_type ?? '').replace(/_/g, ' ').toLowerCase();
+      const reason      = String(p.reason ?? '');
+      const source      = String(p.data_source ?? '');
+
+      const LEVEL_LABEL = ['Impassable', 'Safe — hard cover', 'Soft cover', 'Partial exposure', 'Exposed', 'Maximum exposure'];
+      const LEVEL_COLOR = ['#60a5fa', '#22c55e', '#86efac', '#eab308', '#f97316', '#ef4444'];
+      const label = LEVEL_LABEL[Math.min(level, 5)] ?? 'Unknown';
+      const color = LEVEL_COLOR[Math.min(level, 5)] ?? '#6b7280';
+
+      const TACTICAL: Record<number, string> = {
+        0: 'Water barrier — dismounted only at crossing points',
+        1: 'Protected from direct fire — ideal for assembly & hide sites',
+        2: 'Concealment only — does not protect from fire',
+        3: 'Limited cover — defensible, higher detection risk',
+        4: 'Exposed — movement must be brief and fast',
+        5: 'No cover — avoid in contact; cross by exception only',
+      };
+
+      lyr.bindPopup(buildPopup({
+        header: terrainType || label,
+        headerChip: { text: `L${level}`, color },
+        subheader: label,
+        minWidth: 210,
+        facts: [
+          { label: 'Assessment', value: reason || undefined },
+          { label: 'Source',     value: source  || undefined },
+        ],
+        tactical: TACTICAL[level],
+      }));
+      return;
+    }
+
+    if (layer === 'mcoo') {
+      const p = props as Record<string, unknown>;
+      const cls         = String(p.mcoo_class   ?? '');
+      const role        = String(p.mcoo_role    ?? '');
+      const terrainType = String(p.terrain_type ?? '');
+      const name        = String(p.name ?? '');
+      const reason      = String(p.mcoo_reason  ?? p.reason ?? '');
+      const cite        = String(p.mcoo_cite    ?? '');
+      const doctrine    = String(p.doctrine     ?? '');
+      const source      = String(p.data_source  ?? p.source ?? '');
+      const level       = p.danger_level != null ? `${p.danger_level}` : undefined;
+
+      const clsColor = cls === 'go' ? '#22c55e' : cls === 'slow-go' ? '#eab308' : cls === 'no-go' ? '#ef4444' : '#6b7280';
+      const header = terrainType
+        ? terrainType.replace(/_/g, ' ')
+        : (role || 'MCOO feature');
+      const subheader = [
+        role && role !== terrainType ? role : '',
+        name && name !== '—' ? name : '',
+      ].filter(Boolean).join(' · ') || undefined;
+
+      lyr.bindPopup(buildPopup({
+        header,
+        headerChip: cls ? { text: cls.toUpperCase(), color: clsColor } : undefined,
+        subheader,
+        minWidth: 220,
+        facts: [
+          { label: 'Mobility effect', value: reason || undefined },
+          { label: 'Danger level',    value: level, valueColor: level === '1' ? '#6b7280' : level === '3' ? '#ef4444' : '#eab308' },
+        ],
+        tactical: reason || undefined,
+        details: {
+          label: 'Doctrine reference',
+          facts: [
+            { label: 'Cite',     value: cite     || undefined },
+            { label: 'Doctrine', value: doctrine || undefined },
+            { label: 'Source',   value: source   || undefined },
+          ],
+        },
+      }));
+      return;
+    }
+
     const entries = Object.entries(props)
       .filter(([k]) => k !== 'source')
       .slice(0, 10);

@@ -6,6 +6,8 @@ import TopBar from './dashboard/TopBar';
 import Toaster from './dashboard/Toaster';
 import DebugPanel from './dashboard/DebugPanel';
 import CollabController from './collab/CollabController';
+import DemoBanner from './demo/DemoBanner';
+import { isDemoMode } from './demo/demoMode';
 import { installFetchInterceptor } from './lib/fetchInterceptor';
 
 export default function App() {
@@ -27,7 +29,8 @@ export default function App() {
       </div>
       <Toaster />
       <DebugPanel />
-      <CollabController />
+      {!isDemoMode() && <CollabController />}
+      <DemoBanner />
     </div>
   );
 }

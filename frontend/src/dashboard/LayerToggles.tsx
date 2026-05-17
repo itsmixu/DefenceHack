@@ -15,19 +15,19 @@ interface LayerEntry {
 }
 
 const LAYERS: LayerEntry[] = [
-  { id: 'osm', label: 'OSM POIs', hint: 'hospitals, fuel, power' },
-  { id: 'digiroad', label: 'Digiroad', hint: 'roads & bridges' },
-  { id: 'mml', label: 'MML terrain', hint: 'land cover polygons' },
-  { id: 'mml_contours', label: 'MML contours', hint: 'elevation lines' },
-  { id: 'statfin', label: 'Population', hint: 'Paavo choropleth' },
-  { id: 'fmi', label: 'Weather', hint: 'FMI stations (observations)' },
-  { id: 'fmi_forecast', label: 'Forecast', hint: 'FMI HARMONIE 48 h NWP' },
-  { id: 'syke', label: 'SYKE', hint: 'flood zones & Natura 2000' },
-  { id: 'opencellid', label: 'Cell towers', hint: 'OpenCelliD' },
-  { id: 'starlink', label: 'Starlink', hint: 'LEO constellation (live)' },
-  { id: 'astronomy', label: 'Astronomy', hint: 'sun / moon / twilight' },
-  { id: 'exposure', label: 'Exposure', hint: 'danger zones' },
-  { id: 'mcoo', label: 'MCOO', hint: 'go / slow-go / no-go' },
+  { id: 'osm',          label: 'Points of interest', hint: 'hospitals, fuel, power' },
+  { id: 'digiroad',     label: 'Roads & bridges',    hint: 'passability, width, load limits' },
+  { id: 'mml',          label: 'Terrain types',      hint: 'forest, swamp, fields, water — go/no-go context' },
+  { id: 'mml_contours', label: 'Elevation',          hint: 'contour lines — hills, ridges, dead ground' },
+  { id: 'statfin',      label: 'Population',         hint: 'civilian density by area — billeting & support' },
+  { id: 'fmi',          label: 'Live weather',       hint: 'current wind, temp & visibility at met stations' },
+  { id: 'fmi_forecast', label: 'Weather forecast',   hint: '48-hour wind, rain & drone-fly conditions' },
+  { id: 'syke',         label: 'Flood & nature',     hint: 'flood risk zones, protected areas (Natura 2000)' },
+  { id: 'opencellid',   label: 'Cell towers',        hint: 'coverage radii — signals intelligence & comms' },
+  { id: 'starlink',     label: 'Starlink passes',    hint: 'live satellite positions & coverage footprints' },
+  { id: 'astronomy',    label: 'Light conditions',   hint: 'sunrise, sunset, moon phase — night ops window' },
+  { id: 'exposure',     label: 'Cover & exposure',   hint: 'L1 = hard cover → L5 = fully exposed open ground' },
+  { id: 'mcoo',         label: 'Vehicle mobility',   hint: 'go / slow-go / no-go for wheeled & tracked vehicles' },
 ];
 
 const dotForStatus = (s?: LayerStatus) => {

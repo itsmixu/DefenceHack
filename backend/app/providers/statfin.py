@@ -60,7 +60,7 @@ def _trim_properties(props: dict) -> dict:
 class StatFinProvider(Provider):
     def __init__(self) -> None:
         super().__init__(id="statfin", label="Statistics Finland — Paavo demographics")
-        self.layer = os.getenv("STATFIN_PAAVO_LAYER", DEFAULT_LAYER)
+        self.layer = os.getenv("STATFIN_PAAVO_LAYER") or DEFAULT_LAYER
 
     async def fetch(self, bbox: BBox, t: datetime | None) -> FeatureCollection:
         # Paavo's BBOX filter must be in the layer's native CRS.

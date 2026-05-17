@@ -1,11 +1,1 @@
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "source": "opencellid", "id": "demo-tower" },
-      "geometry": { "type": "Point", "coordinates": [24.3, 60.22] }
-    }
-  ],
-  "meta": { "status": "ok", "attribution": "Demo data" }
-}
+{"type":"FeatureCollection","features":[],"meta":{"source":"opencellid","status":"partial","reason":"bbox covers 16 OpenCelliD tiles (max 9); zoom in further","bbox":[29.69,62.57,29.82,62.63],"t":"2026-05-17T01:02:08Z","generated_at":"2026-05-17T01:02:40.262460Z","attribution":null}}

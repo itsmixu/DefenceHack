@@ -12,6 +12,7 @@ import OverlayLayer from './OverlayLayer';
 import ZoneControls from './ZoneControls';
 import MapToolbar from './MapToolbar';
 import { basemaps } from './basemaps';
+import { getDemoManifest, isDemoMode } from '../demo/demoMode';
 import {
   useBackendStatusStore,
   useFeatureCacheStore,
@@ -152,19 +153,30 @@ export default function MapView() {
     });
   };
 
+  // In demo mode the map opens at the captured AO and panning is clamped
+  // tight around it so the user can't wander into bbox cells with no data.
+  const demoManifest = isDemoMode() ? getDemoManifest() : null;
+  const initialCenter: [number, number] = demoManifest?.center ?? [64, 25];
+  const initialZoom = demoManifest?.zoom ?? 5;
+  const maxBounds: [[number, number], [number, number]] = demoManifest
+    ? [
+        [demoManifest.bbox[1] - 0.3, demoManifest.bbox[0] - 0.6],
+        [demoManifest.bbox[3] + 0.3, demoManifest.bbox[2] + 0.6],
+      ]
+    : [
+        [58.5, 17.0],
+        [71.5, 34.0],
+      ];
+
   return (
     <div className="relative h-full w-full">
       <MapContainer
-        center={[64, 25]}
-        zoom={5}
+        center={initialCenter}
+        zoom={initialZoom}
         minZoom={4}
-        // Hard-clamp panning to the Finland area (with a generous margin so
-        // the user can still see the country edges + a buffer of sea/border).
-        // viscosity=1 disables the rubber-band drag-past effect.
-        maxBounds={[
-          [58.5, 17.0],
-          [71.5, 34.0],
-        ]}
+        // Hard-clamp panning. In normal mode this is all of Finland; in demo
+        // mode it's a small ring around the captured AO so all data is in view.
+        maxBounds={maxBounds}
         maxBoundsViscosity={1.0}
         worldCopyJump={false}
         className="h-full w-full"
@@ -243,7 +255,7 @@ export default function MapView() {
         </div>
       )}
 
-      <div className="pointer-events-auto absolute right-3 top-24 z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
+      <div className="pointer-events-auto absolute right-3 top-[76px] z-[1000] flex flex-col gap-2 rounded border border-white/15 bg-black/95 p-2 text-xs text-white/85 shadow-[0_10px_32px_rgba(0,0,0,0.5)]">
         <button
           type="button"
           onClick={() => setBasemapPanelOpen((s) => !s)}
