@@ -6,7 +6,7 @@ and visualises operationally relevant open-source data (terrain, weather,
 infrastructure, demographics, satellite overpasses, etc.) on an interactive
 2D map with drawing tools and a dashboard.
 
-<img width="1000" alt="Screenshot" src="https://github.com/user-attachments/assets/24e4cabc-5afb-4d09-9cb7-038ba6d2a218" />
+<img width="1000" alt="Screenshot From 2026-05-17 11-45-57" src="https://github.com/user-attachments/assets/e4359f46-1e82-43e0-809e-190acf8967cb" />
 
 
 ## Quick start
