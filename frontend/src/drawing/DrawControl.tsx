@@ -3,7 +3,7 @@ import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
 import type { Feature } from 'geojson';
-import { useDrawnStore, useTacticalStore } from '../store';
+import { useDrawnStore, useOpenFilesStore, useTacticalStore } from '../store';
 import type { DrawnFeature } from '../api/types';
 
 // All supported feature type strings (doctrinal + tactical + freeform).
@@ -19,6 +19,7 @@ type FeatureType = typeof ALL_TYPES[number];
 interface TaggedLayer extends L.Layer {
   _leaflet_id: number;
   _defenceHackFeatureType?: FeatureType;
+  _defenceHackPhaseId?: number | null;
   toGeoJSON: () => Feature;
 }
 
@@ -96,6 +97,7 @@ export default function DrawControl() {
         f.properties = {
           ...(f.properties ?? {}),
           feature_type: layer._defenceHackFeatureType ?? 'annotation',
+          phaseId: layer._defenceHackPhaseId ?? null,
         };
         geomanFeatures.push(f);
       });
@@ -142,6 +144,12 @@ export default function DrawControl() {
       } else {
         layer._defenceHackFeatureType = promptType();
       }
+      // Stash the selected phase at creation time so later edits/syncs keep
+      // the shape pinned to the same phase. Only meaningful when a file is open.
+      const hasActiveFile = useOpenFilesStore.getState().activeTabId != null;
+      layer._defenceHackPhaseId = hasActiveFile
+        ? useTacticalStore.getState().selectedPhaseId
+        : null;
       applyStyle(layer, layer._defenceHackFeatureType ?? 'annotation');
       drawn.set(layer._leaflet_id, layer);
       layer.on('pm:edit pm:update', sync);

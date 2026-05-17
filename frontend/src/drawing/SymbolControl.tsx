@@ -21,7 +21,7 @@ import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import ms from 'milsymbol';
-import { useDrawnStore, useTacticalStore } from '../store';
+import { useDrawnStore, useOpenFilesStore, useTacticalStore } from '../store';
 import type { DrawnFeature } from '../api/types';
 
 const SYMBOL_SIZE = 40; // px — rendered icon size
@@ -118,6 +118,8 @@ export default function SymbolControl() {
 
       markersRef.current.set(id, marker);
 
+      const hasActiveFile = useOpenFilesStore.getState().activeTabId != null;
+      const phaseId = hasActiveFile ? useTacticalStore.getState().selectedPhaseId : null;
       const feature: DrawnFeature = {
         type: 'Feature',
         id,
@@ -128,6 +130,7 @@ export default function SymbolControl() {
           name: sym.name,
           category: sym.category,
           customName: customLabel ?? null,
+          phaseId,
         },
       };
       useDrawnStore.getState().addFeature(feature);

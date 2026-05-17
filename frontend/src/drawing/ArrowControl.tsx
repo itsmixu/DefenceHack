@@ -15,7 +15,7 @@
 import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { useDrawnStore, useTacticalStore } from '../store';
+import { useDrawnStore, useOpenFilesStore, useTacticalStore } from '../store';
 import type { ArrowStyle } from '../store';
 import type { DrawnFeature } from '../api/types';
 
@@ -367,7 +367,10 @@ export default function ArrowControl() {
 
       group.addTo(map);
 
-      const phaseId = useTacticalStore.getState().selectedPhaseId;
+      // Only attach a phaseId when a file is actually open — otherwise the
+      // drawing is "loose" and belongs to no phase.
+      const hasActiveFile = useOpenFilesStore.getState().activeTabId != null;
+      const phaseId = hasActiveFile ? useTacticalStore.getState().selectedPhaseId : null;
       const entry: ArrowEntry & { phaseId: number | null } = {
         id, startLatLng: start, endLatLng: end,
         color, weight, headLen, headWid, style,
