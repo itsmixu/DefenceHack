@@ -34,6 +34,23 @@ npm install
 npm run dev                  # http://localhost:5173
 ```
 
+## Demo mode (no backend)
+
+The frontend ships with a preloaded snapshot of central Joensuu so the
+whole tool can run as a static SPA — useful for hackathon judges, video
+demos, or anyone without the backend running.
+
+- **Use it:** open any deploy of `npm run build` (or `npm run dev`) with
+  the query flag `?demo=1` — e.g. `https://your-site.example/?demo=1`.
+  An amber `DEMO · Joensuu` pill appears at the bottom of the screen.
+- **Refresh the snapshot:** with the backend running locally, run
+  `./scripts/capture-demo-snapshot.sh`. This re-captures all 13 layers
+  and the briefing analyses into `frontend/public/demo/`.
+- **What's stubbed:** collab is disabled, file save/rename/delete are
+  no-ops, and the map is clamped to the captured AO so the user can't
+  pan into empty bbox cells. Everything else (drawing, symbols, ruler,
+  briefing cards, popups) works as in the live app.
+
 ## Data sources
 
 National Land Survey of Finland (MML), Finnish Meteorological Institute
