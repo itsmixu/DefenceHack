@@ -1,10 +1,7 @@
 # Junction x Aalto Defence Hackathon — L1Nx 
 ## **61N Challenge**: automate intelligence preparation of the battlespace (IPB) using open-source data.
 
-Given an Area of Interest and a timeframe, the tool retrieves, processes,
-and visualises operationally relevant open-source data (terrain, weather,
-infrastructure, demographics, satellite overpasses, etc.) on an interactive
-2D map with drawing tools and a dashboard.
+**L1NX** turns any area of interest into a full operational picture — in seconds. Drop a location, get live terrain analysis, weather intelligence, infrastructure mapping, satellite windows, population data, and automated threat indexing, all fused onto a single interactive map. Built for speed, designed for the field.
 
 <img width="1000" alt="Screenshot From 2026-05-17 11-45-57" src="https://github.com/user-attachments/assets/e4359f46-1e82-43e0-809e-190acf8967cb" />
 
