@@ -88,7 +88,7 @@ function SlotButton({ index }: SlotButtonProps) {
 
   const filled = !!slot;
   const base =
-    'relative flex h-9 w-9 select-none items-center justify-center rounded border text-sm font-semibold transition active:scale-95';
+    'relative flex h-9 w-9 select-none items-center justify-center rounded-lg border text-sm font-semibold transition active:scale-95';
   const skin = filled
     ? 'border-white/35 bg-black/80 text-white hover:bg-black/95'
     : 'border-white/20 bg-black/90 text-white/65 hover:border-white/35 hover:bg-black hover:text-white';
@@ -124,7 +124,7 @@ function SlotButton({ index }: SlotButtonProps) {
 
 export default function LayerSlots() {
   return (
-    <div className="rounded border border-white/10 bg-black/30 p-2 text-white">
+    <div className="rounded-lg border border-white/10 bg-black/30 p-2 text-white">
       <div className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
         Layer Presets
       </div>

@@ -47,13 +47,13 @@ export default function DroneConditionsCard() {
   const nextGo = data.summary.next_go_window;
 
   return (
-    <section className="rounded border border-white/10 bg-black/40 p-3">
+    <section className="rounded-lg border border-white/10 bg-black/40 p-3">
       <header className="mb-2 flex items-center justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90">
           UAS / Drone Conditions
         </h3>
         <span
-          className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] ${ratingColor(data.summary.current_rating)}`}
+          className={`rounded-lg px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] ${ratingColor(data.summary.current_rating)}`}
         >
           {data.summary.current_rating}
         </span>
@@ -71,7 +71,7 @@ export default function DroneConditionsCard() {
             <span>next 24 h</span>
             <span>{shortHour(next[0].time)} → {shortHour(next[next.length - 1].time)}</span>
           </div>
-          <div className="flex h-5 overflow-hidden rounded border border-white/10">
+          <div className="flex h-5 overflow-hidden rounded-lg border border-white/10">
             {next.map((step) => (
               <div
                 key={step.time}
@@ -97,7 +97,7 @@ export default function DroneConditionsCard() {
 
 function Skeleton({ title, hint }: { title: string; hint: string }) {
   return (
-    <section className="rounded border border-white/10 bg-black/30 px-3 py-2">
+    <section className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/70">{title}</h3>
       <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white/45">{hint}</p>
     </section>

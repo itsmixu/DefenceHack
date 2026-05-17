@@ -45,7 +45,7 @@ export default function SourceStatusList() {
           return (
             <li
               key={s.id}
-              className="rounded border border-white/10 bg-black/30 p-2 text-xs"
+              className="rounded-lg border border-white/10 bg-black/30 p-2 text-xs"
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/90">{s.label}</span>

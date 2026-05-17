@@ -92,7 +92,7 @@ export default function DrawnList() {
               return (
                 <li
                   key={String(f.id)}
-                  className="flex items-center gap-2 rounded border border-white/10 bg-black/30 px-2 py-1.5"
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5"
                 >
                   {/* Arrow preview */}
                   <svg width="36" height="14" style={{ flexShrink: 0, overflow: 'visible' }}>
@@ -120,7 +120,7 @@ export default function DrawnList() {
                   <button
                     onClick={() => removeFeature(String(f.id))}
                     title="Delete arrow"
-                    className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
+                    className="shrink-0 rounded-lg p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
                   >
                     <Trash2 size={11} />
                   </button>
@@ -148,7 +148,7 @@ export default function DrawnList() {
               return (
                 <li
                   key={String(f.id)}
-                  className="flex items-center gap-2 rounded border border-amber-300/25 bg-black/30 px-2 py-1.5"
+                  className="flex items-center gap-2 rounded-lg border border-amber-300/25 bg-black/30 px-2 py-1.5"
                 >
                   <Ruler size={14} className="shrink-0 text-amber-300" />
                   <div className="min-w-0 flex-1">
@@ -158,7 +158,7 @@ export default function DrawnList() {
                   <button
                     onClick={() => removeFeature(String(f.id))}
                     title="Delete ruler"
-                    className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
+                    className="shrink-0 rounded-lg p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300"
                   >
                     <Trash2 size={11} />
                   </button>
@@ -183,14 +183,14 @@ export default function DrawnList() {
               const name     = p.name     ?? 'Symbol';
               const category = p.category ?? '';
               return (
-                <li key={String(f.id)} className="flex items-center gap-2 rounded border border-white/10 bg-black/30 px-2 py-1.5">
+                <li key={String(f.id)} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5">
                   <SymbolMiniIcon sidc={sidc} />
                   <div className="min-w-0 flex-1">
                     <div className="font-mono text-[10px] font-semibold text-white/85">{name}</div>
                     <div className="font-mono text-[9px] text-white/40">{category}</div>
                   </div>
                   <button onClick={() => removeFeature(String(f.id))} title="Delete symbol"
-                    className="shrink-0 rounded p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300">
+                    className="shrink-0 rounded-lg p-1 text-white/30 hover:bg-red-500/15 hover:text-red-300">
                     <Trash2 size={11} />
                   </button>
                 </li>
@@ -215,11 +215,11 @@ export default function DrawnList() {
               return (
                 <li
                   key={String(f.id)}
-                  className="rounded border border-white/10 bg-black/30 p-2 text-xs"
+                  className="rounded-lg border border-white/10 bg-black/30 p-2 text-xs"
                 >
                   <div className="flex items-center justify-between">
                     <span
-                      className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${
+                      className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] ${
                         STYLE_BY_TYPE[ft] ?? STYLE_BY_TYPE.annotation
                       }`}
                     >

@@ -51,7 +51,7 @@ export default function AstronomyCard() {
   }
 
   return (
-    <section className="rounded border border-white/10 bg-black/40 p-3">
+    <section className="rounded-lg border border-white/10 bg-black/40 p-3">
       <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90">
         Astronomy · sun / moon / twilight
       </h3>
@@ -60,7 +60,7 @@ export default function AstronomyCard() {
         {data.features.map((f) => {
           const p: AstronomicalDayProps = f.properties;
           return (
-            <li key={p.date} className="rounded border border-white/10 bg-white/[0.02] px-2 py-1.5">
+            <li key={p.date} className="rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
                   {dateLabel(p.date)}
@@ -95,7 +95,7 @@ export default function AstronomyCard() {
 
 function Skeleton({ title, hint }: { title: string; hint: string }) {
   return (
-    <section className="rounded border border-white/10 bg-black/30 px-3 py-2">
+    <section className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/70">{title}</h3>
       <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white/45">{hint}</p>
     </section>

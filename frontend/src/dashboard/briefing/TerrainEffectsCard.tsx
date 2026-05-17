@@ -32,7 +32,7 @@ export default function TerrainEffectsCard() {
   if (error || !data) return <EmptyCard title="Terrain Effects" hint="Unavailable." />;
 
   return (
-    <section className="rounded border border-white/10 bg-black/40 p-3">
+    <section className="rounded-lg border border-white/10 bg-black/40 p-3">
       <header className="mb-2 flex items-baseline justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90">
           Terrain Effects Matrix
@@ -49,7 +49,7 @@ export default function TerrainEffectsCard() {
           const fn: TerrainFunctionRating | undefined = data.functions[key];
           if (!fn) return null;
           return (
-            <li key={key} className="rounded border border-white/10 bg-white/[0.02] px-2 py-1.5">
+            <li key={key} className="rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/85">
                   {key}
@@ -106,7 +106,7 @@ export default function TerrainEffectsCard() {
 
 function Stat({ color, label, value }: { color: string; label: string; value: string }) {
   return (
-    <div className="rounded border border-white/10 bg-black/40 px-1.5 py-1 text-center">
+    <div className="rounded-lg border border-white/10 bg-black/40 px-1.5 py-1 text-center">
       <div className={`font-mono text-[11px] ${color}`}>{value}</div>
       <div className="font-mono text-[9px] tracking-[0.06em] text-white/50">{label}</div>
     </div>
@@ -115,7 +115,7 @@ function Stat({ color, label, value }: { color: string; label: string; value: st
 
 function EmptyCard({ title, hint }: { title: string; hint: string }) {
   return (
-    <section className="rounded border border-white/10 bg-black/30 px-3 py-2">
+    <section className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/70">{title}</h3>
       <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-white/45">{hint}</p>
     </section>

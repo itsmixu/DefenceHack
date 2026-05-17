@@ -70,7 +70,7 @@ export default function LayerToggles() {
         <button
           type="button"
           onClick={handleReload}
-          className="flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/75 transition hover:border-white hover:bg-white hover:text-black"
+          className="flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/75 transition hover:border-white hover:bg-white hover:text-black"
           style={{ borderColor: '#393939', background: '#1a1a1a' }}
           title="Refetch every active layer (keeps the cache)"
         >
@@ -80,7 +80,7 @@ export default function LayerToggles() {
         <button
           type="button"
           onClick={handleClearCache}
-          className="flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/75 transition hover:border-white hover:bg-white hover:text-black"
+          className="flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/75 transition hover:border-white hover:bg-white hover:text-black"
           style={{ borderColor: '#393939', background: '#1a1a1a' }}
           title="Discard cached layer features and refetch on next viewport change"
         >
@@ -94,7 +94,7 @@ export default function LayerToggles() {
           const minZoom = MIN_ZOOM_BY_LAYER[l.id];
           const suppressed = !!active[l.id] && isLayerSuppressedByZoom(l.id, zoom);
           return (
-            <li key={l.id} className="rounded border border-white/10 bg-black/30 px-2 py-1.5 hover:bg-white/[0.04]">
+            <li key={l.id} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 hover:bg-white/[0.04]">
               <div className="flex items-center justify-between">
                 <label className="flex flex-1 cursor-pointer items-center gap-2">
                   <input
@@ -109,7 +109,7 @@ export default function LayerToggles() {
                 </label>
                 {suppressed ? (
                   <span
-                    className="rounded border border-amber-300/50 bg-amber-300/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-amber-200"
+                    className="rounded-lg border border-amber-300/50 bg-amber-300/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-amber-200"
                     title={`Zoom ≥ ${minZoom} to load this layer (current ${zoom ?? '?'})`}
                   >
                     zoom ≥ {minZoom}
@@ -128,7 +128,7 @@ export default function LayerToggles() {
               </div>
 
               {isOsm && active.osm && (
-                <div className="mt-2 rounded border border-white/15 bg-black/45 p-2">
+                <div className="mt-2 rounded-lg border border-white/15 bg-black/45 p-2">
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/65">
                       POI filters
@@ -137,14 +137,14 @@ export default function LayerToggles() {
                       <button
                         type="button"
                         onClick={setAllOsm}
-                        className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.12]"
+                        className="rounded-lg border border-white/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.12]"
                       >
                         all
                       </button>
                       <button
                         type="button"
                         onClick={clearAllOsm}
-                        className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.12]"
+                        className="rounded-lg border border-white/20 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.12]"
                       >
                         none
                       </button>

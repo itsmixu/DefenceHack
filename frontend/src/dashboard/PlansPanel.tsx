@@ -86,7 +86,7 @@ function ConditionsCard({ snap }: { snap: Record<string, unknown> }) {
   if (!temp && !wind && !cloud) return null;
 
   return (
-    <div className="mt-2 rounded border border-sky-400/20 bg-sky-500/5 px-2.5 py-2">
+    <div className="mt-2 rounded-lg border border-sky-400/20 bg-sky-500/5 px-2.5 py-2">
       <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-sky-300/70">
         Conditions at save time {fetchedAt ? `· ${fmtDate(fetchedAt)}` : ''}
       </p>
@@ -359,7 +359,7 @@ export default function PlansPanel() {
 
       {/* ── History mode banner ──────────────────────────────────────────────── */}
       {historyBanner && (
-        <div className="rounded border border-amber-300/40 bg-amber-500/10 px-3 py-2">
+        <div className="rounded-lg border border-amber-300/40 bg-amber-500/10 px-3 py-2">
           <div className="mb-1 flex items-center gap-1.5">
             <Clock size={11} className="text-amber-300" />
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-200">
@@ -374,7 +374,7 @@ export default function PlansPanel() {
           )}
           <button
             onClick={exitHistory}
-            className="mt-2 flex items-center gap-1.5 rounded border border-amber-300/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-200 hover:bg-amber-400/20"
+            className="mt-2 flex items-center gap-1.5 rounded-lg border border-amber-300/50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-200 hover:bg-amber-400/20"
           >
             <RotateCcw size={10} />
             Exit history — return to live
@@ -392,19 +392,19 @@ export default function PlansPanel() {
             value={planName}
             onChange={(e) => setPlanName(e.target.value)}
             placeholder="Plan name…"
-            className="w-full rounded border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
+            className="w-full rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
           />
           <div className="flex gap-1.5">
             <input
               value={unitName}
               onChange={(e) => setUnitName(e.target.value)}
               placeholder="Unit (e.g. 1 Platoon)…"
-              className="flex-1 rounded border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
+              className="flex-1 rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
             />
             <select
               value={parentPlanId}
               onChange={(e) => setParentPlanId(e.target.value)}
-              className="flex-1 rounded border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white focus:border-white/35 focus:outline-none"
+              className="flex-1 rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white focus:border-white/35 focus:outline-none"
             >
               <option value="">No parent (top-level)</option>
               {allPlans.filter((p) => p.id !== currentPlanId).map((p) => (
@@ -415,7 +415,7 @@ export default function PlansPanel() {
           <button
             onClick={() => savePlan.mutate()}
             disabled={savePlan.isPending}
-            className="flex w-full items-center justify-center gap-1.5 rounded border border-white/20 bg-white/[0.08] px-2.5 py-1.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.15] disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/[0.08] px-2.5 py-1.5 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.15] disabled:opacity-40"
           >
             {savePlan.isPending ? (
               <span className="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />
@@ -429,7 +429,7 @@ export default function PlansPanel() {
 
       {/* ── Phase tabs (only when a plan is loaded) ──────────────────────────── */}
       {currentPlanId && !historyBanner && (
-        <section className="rounded border border-white/10 bg-black/25 p-2.5">
+        <section className="rounded-lg border border-white/10 bg-black/25 p-2.5">
           <div className="mb-2 flex items-center justify-between">
             <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
               <Layers size={10} className="mr-1 inline" />
@@ -438,7 +438,7 @@ export default function PlansPanel() {
             {phases.length < MAX_PHASES && (
               <button
                 onClick={addPhase}
-                className="flex items-center gap-0.5 rounded border border-white/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.06em] text-white/50 hover:border-white/35 hover:text-white"
+                className="flex items-center gap-0.5 rounded-lg border border-white/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.06em] text-white/50 hover:border-white/35 hover:text-white"
               >
                 <Plus size={9} />
                 Add
@@ -468,7 +468,7 @@ export default function PlansPanel() {
                         setEditingPhaseIdx(null);
                       }
                     }}
-                    className="w-28 rounded border border-white/35 bg-black/60 px-1.5 py-0.5 text-[10px] text-white focus:outline-none"
+                    className="w-28 rounded-lg border border-white/35 bg-black/60 px-1.5 py-0.5 text-[10px] text-white focus:outline-none"
                   />
                 ) : (
                   <button
@@ -483,7 +483,7 @@ export default function PlansPanel() {
                       setEditingPhaseIdx(i);
                     }}
                     title="Click to switch · Double-click to rename"
-                    className={`rounded border px-2 py-0.5 text-[10px] transition ${
+                    className={`rounded-lg border px-2 py-0.5 text-[10px] transition ${
                       i === currentPhase
                         ? 'border-white/55 bg-white/15 text-white'
                         : 'border-white/15 text-white/55 hover:border-white/35 hover:text-white/80'
@@ -503,7 +503,7 @@ export default function PlansPanel() {
 
       {/* ── Save version snapshot ────────────────────────────────────────────── */}
       {currentPlanId && !historyBanner && (
-        <section className="rounded border border-white/10 bg-black/25 p-2.5">
+        <section className="rounded-lg border border-white/10 bg-black/25 p-2.5">
           <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/55">
             <Tag size={10} className="mr-1 inline" />
             Tag version snapshot
@@ -513,7 +513,7 @@ export default function PlansPanel() {
               <button
                 key={l}
                 onClick={() => setVersionLabel(l)}
-                className={`rounded border px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] transition ${
+                className={`rounded-lg border px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] transition ${
                   versionLabel === l
                     ? 'border-white/55 bg-white/15 text-white'
                     : 'border-white/15 text-white/55 hover:border-white/35 hover:text-white/80'
@@ -529,12 +529,12 @@ export default function PlansPanel() {
               onChange={(e) => setVersionLabel(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && versionLabel.trim() && saveVersion.mutate()}
               placeholder="Custom label…"
-              className="flex-1 rounded border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
+              className="flex-1 rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-white placeholder:text-white/30 focus:border-white/35 focus:outline-none"
             />
             <button
               onClick={() => saveVersion.mutate()}
               disabled={saveVersion.isPending || !versionLabel.trim()}
-              className="flex items-center gap-1 rounded border border-white/20 bg-white/[0.08] px-2.5 py-1 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.15] disabled:opacity-40"
+              className="flex items-center gap-1 rounded-lg border border-white/20 bg-white/[0.08] px-2.5 py-1 text-[10px] uppercase tracking-[0.06em] text-white/80 hover:bg-white/[0.15] disabled:opacity-40"
             >
               {saveVersion.isPending ? (
                 <span className="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white" />
@@ -608,7 +608,7 @@ function PlanRow({ plan, isActive, isExpanded, children, onLoad, onDelete, onTog
   });
 
   return (
-    <li className={`rounded border ${isActive ? 'border-white/35 bg-white/[0.04]' : 'border-white/10 bg-black/30'}`}>
+    <li className={`rounded-lg border ${isActive ? 'border-white/35 bg-white/[0.04]' : 'border-white/10 bg-black/30'}`}>
       {/* Header row */}
       <div className="flex items-center gap-2 px-2.5 py-2">
         <FolderOpen size={12} className={isActive ? 'text-white/70' : 'text-white/30'} />
@@ -625,13 +625,13 @@ function PlanRow({ plan, isActive, isExpanded, children, onLoad, onDelete, onTog
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={onLoad} className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/65 hover:bg-white/[0.1] hover:text-white">
+          <button onClick={onLoad} className="rounded-lg border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/65 hover:bg-white/[0.1] hover:text-white">
             Load
           </button>
-          <button onClick={onDelete} className="rounded border border-white/10 p-1 text-red-300/50 hover:border-red-300/35 hover:bg-red-500/10 hover:text-red-200">
+          <button onClick={onDelete} className="rounded-lg border border-white/10 p-1 text-red-300/50 hover:border-red-300/35 hover:bg-red-500/10 hover:text-red-200">
             <Trash2 size={10} />
           </button>
-          <button onClick={onToggleExpand} className="rounded border border-white/10 p-1 text-white/45 hover:bg-white/[0.06] hover:text-white">
+          <button onClick={onToggleExpand} className="rounded-lg border border-white/10 p-1 text-white/45 hover:bg-white/[0.06] hover:text-white">
             {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
         </div>
@@ -656,7 +656,7 @@ function PlanRow({ plan, isActive, isExpanded, children, onLoad, onDelete, onTog
               </p>
               <ul className="space-y-1">
                 {children.map((child) => (
-                  <li key={child.id} className="flex items-center gap-2 rounded border border-white/10 bg-black/20 px-2 py-1.5">
+                  <li key={child.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5">
                     <ChevronRight size={9} className="text-white/30" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[11px] text-white/80">{child.name}</p>
@@ -666,7 +666,7 @@ function PlanRow({ plan, isActive, isExpanded, children, onLoad, onDelete, onTog
                     </div>
                     <button
                       onClick={() => onLoadChild(child.id, child.name)}
-                      className="rounded border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+                      className="rounded-lg border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/55 hover:bg-white/[0.08] hover:text-white"
                     >
                       Load
                     </button>
@@ -724,11 +724,11 @@ interface VersionRowProps {
 
 function VersionRow({ version: v, prev, onView }: VersionRowProps) {
   return (
-    <li className="rounded border border-white/10 bg-black/20 px-2 py-1.5">
+    <li className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="flex-shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-white/55">
+            <span className="flex-shrink-0 rounded-lg bg-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-white/55">
               v{v.version}
             </span>
             <span className="truncate text-[11px] text-white/85">{v.label}</span>
@@ -744,7 +744,7 @@ function VersionRow({ version: v, prev, onView }: VersionRowProps) {
           {v.active_layers.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
               {v.active_layers.slice(0, 5).map((l) => (
-                <span key={l} className="rounded bg-white/[0.07] px-1 py-px font-mono text-[8px] uppercase tracking-[0.04em] text-white/45">
+                <span key={l} className="rounded-lg bg-white/[0.07] px-1 py-px font-mono text-[8px] uppercase tracking-[0.04em] text-white/45">
                   {l}
                 </span>
               ))}
@@ -770,7 +770,7 @@ function VersionRow({ version: v, prev, onView }: VersionRowProps) {
 
         <button
           onClick={onView}
-          className="flex-shrink-0 self-start rounded border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+          className="flex-shrink-0 self-start rounded-lg border border-white/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] text-white/55 hover:bg-white/[0.08] hover:text-white"
         >
           View
         </button>

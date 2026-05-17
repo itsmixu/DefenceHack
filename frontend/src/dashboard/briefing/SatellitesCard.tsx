@@ -54,7 +54,7 @@ export default function SatellitesCard() {
   const maxElev = sats[0]?.properties.elevation_deg ?? 0;
 
   return (
-    <section className="rounded border border-white/10 bg-black/40 p-3">
+    <section className="rounded-lg border border-white/10 bg-black/40 p-3">
       <header className="mb-2 flex items-baseline justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90">
           Starlink overhead
@@ -65,10 +65,10 @@ export default function SatellitesCard() {
       </header>
 
       <div className="mb-2 flex flex-wrap gap-1">
-        <span className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-white/75">
+        <span className="rounded-lg border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-white/75">
           best elev: {maxElev.toFixed(1)}°
         </span>
-        <span className="rounded border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-white/75">
+        <span className="rounded-lg border border-white/15 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-white/75">
           avg alt: {avgAlt.toFixed(0)} km
         </span>
       </div>
@@ -80,7 +80,7 @@ export default function SatellitesCard() {
           return (
             <li
               key={p.norad_id ?? p.satname}
-              className="rounded border border-white/10 bg-white/[0.02] px-2 py-1"
+              className="rounded-lg border border-white/10 bg-white/[0.02] px-2 py-1"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate text-[11px] font-semibold text-white/90">
@@ -113,7 +113,7 @@ export default function SatellitesCard() {
 
 function Skeleton({ hint }: { hint: string }) {
   return (
-    <section className="rounded border border-white/10 bg-black/30 px-3 py-2">
+    <section className="rounded-lg border border-white/10 bg-black/30 px-3 py-2">
       <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/70">
         Starlink overhead
       </h3>
