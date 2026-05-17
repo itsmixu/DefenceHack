@@ -47,12 +47,20 @@ export default function LayerToggles() {
   const toggleOsm = useOsmPoiFilterStore((s) => s.toggle);
   const setAllOsm = useOsmPoiFilterStore((s) => s.setAll);
   const clearAllOsm = useOsmPoiFilterStore((s) => s.clearAll);
+  const clearLayerFeatures = useFeatureCacheStore((s) => s.clear);
   const clearAllFeatures = useFeatureCacheStore((s) => s.clearAll);
   const queryClient = useQueryClient();
   const pushToast = useToastStore((s) => s.push);
 
   const handleReload = () => {
+    // The feature cache tracks covered bboxes; invalidateQueries alone does nothing
+    // because SourceLayer keeps `enabled: false` while a bbox is still covered.
+    // Clear active layers' coverage so they re-fetch the current viewport.
+    Object.entries(active)
+      .filter(([, on]) => on)
+      .forEach(([id]) => clearLayerFeatures(id as LayerKey));
     queryClient.invalidateQueries({ queryKey: ['layer'] });
+    pushToast('info', 'Reloading active layers…');
   };
 
   const handleClearCache = () => {
