@@ -74,6 +74,7 @@ import {
   useLayerStore,
   useMapStore,
   useOpenFilesStore,
+  useTacticalStore,
   useTimelineStore,
   useToastStore,
   captureLiveMapState,
@@ -571,6 +572,7 @@ export default function FileManagerOverlay() {
   const overlayTabIds  = useOpenFilesStore((s) => s.overlayTabIds);
   const activeTab      = useMemo(() => tabs.find((t) => t.id === activeTabId) ?? null, [tabs, activeTabId]);
   const activePhase    = activeTab?.phases.find((p) => p.id === activeTab.activePhaseId) ?? null;
+  const selectedPhaseId = useTacticalStore((s) => s.selectedPhaseId);
 
   // Local UI state ───────────────────────────────────────────────────────────
   const [open, setOpen]                       = useState(false);
@@ -631,6 +633,9 @@ export default function FileManagerOverlay() {
   }, [qc]);
 
   // ── Open file → push as new tab ──────────────────────────────────────────
+  // New model: file's drawn_features is one global collection (each feature
+  // tagged with phaseId). Load it once into useDrawnStore — phase switching
+  // later just changes the highlight filter, no swap-in/swap-out.
   const handleOpen = useCallback(async (file: FsFileMeta) => {
     setOpeningId(file.id);
     try {
@@ -638,9 +643,35 @@ export default function FileManagerOverlay() {
       const map = useMapStore.getState().map;
       const live = activeTabId ? captureLiveMapState(map) : undefined;
       const tab = useOpenFilesStore.getState().openTab(content, live);
-      // Load the new tab's active phase into the live editing stores
-      const newPhase = tab.phases.find((p) => p.id === tab.activePhaseId);
-      if (newPhase) loadPhaseIntoLive(newPhase);
+      // Wipe the live stores then push the file's global content.
+      useFeatureCacheStore.getState().clearAll();
+      if (content.layer_snapshots && Object.keys(content.layer_snapshots).length > 0) {
+        useFeatureCacheStore.getState().injectSnapshots(
+          content.layer_snapshots as Record<string, { features: Feature[] }>,
+          content.bbox ?? undefined,
+        );
+      }
+      useLayerStore.getState().setActiveLayers((content.active_layers ?? []) as LayerKey[]);
+      useDrawnStore.getState().setAll((content.drawn_features?.features ?? []) as DrawnFeature[]);
+      if (content.timeline_selected_ms != null) {
+        useTimelineStore.getState().setSelectedMs(content.timeline_selected_ms);
+      }
+      if (map) {
+        if (content.bbox) {
+          const [w, s, e, n] = content.bbox;
+          map.fitBounds([[s, w], [n, e]], { animate: true, duration: 0.6 });
+        } else if (content.center && content.zoom != null) {
+          map.flyTo([content.center[0], content.center[1]], content.zoom, { animate: true, duration: 0.6 });
+        }
+      }
+      // Pick a sensible initial selected phase: the file's current_phase if
+      // it still exists, otherwise the first phase. Defaults to 1 for legacy
+      // single-state files.
+      const firstPhaseId = tab.phases[0]?.id ?? 1;
+      const initialSelected = tab.phases.some((p) => p.id === tab.activePhaseId)
+        ? tab.activePhaseId
+        : firstPhaseId;
+      useTacticalStore.getState().setSelectedPhaseId(initialSelected);
       push('success', `Opened: ${content.name}`);
     } catch (e) {
       push('error', `Failed to open: ${String(e)}`);
@@ -658,6 +689,8 @@ export default function FileManagerOverlay() {
     if (!incoming) return;
     const phase = incoming.phases.find((p) => p.id === incoming.activePhaseId);
     if (phase) loadPhaseIntoLive(phase);
+    // Sync the global selected phase to the new tab's saved selection.
+    useTacticalStore.getState().setSelectedPhaseId(incoming.activePhaseId);
   }, [activeTabId]);
 
   // ── Close tab ──────────────────────────────────────────────────────────────
@@ -682,12 +715,21 @@ export default function FileManagerOverlay() {
   }, [tabs, activeTabId]);
 
   // ── Switch phase within the active tab ───────────────────────────────────
+  // Switching is now a pure highlight/filter — features stay in one global
+  // collection, we just change which phaseId is "selected" (matched features
+  // render at full opacity, others get dimmed by the drawing tools).
+  //
+  // Clicking the already-active phase deselects → null mode = "view all".
   const handleSwitchPhase = useCallback((newPhaseId: number) => {
-    if (!activeTab || newPhaseId === activeTab.activePhaseId) return;
-    const map = useMapStore.getState().map;
-    const live = captureLiveMapState(map);
-    const newPhase = useOpenFilesStore.getState().setTabPhase(activeTab.id, newPhaseId, live);
-    if (newPhase) loadPhaseIntoLive(newPhase);
+    if (!activeTab) return;
+    const current = useTacticalStore.getState().selectedPhaseId;
+    const next = current === newPhaseId ? null : newPhaseId;
+    useTacticalStore.getState().setSelectedPhaseId(next);
+    // Mirror onto the tab's activePhaseId so save/round-trip keeps the
+    // user's last-selected phase. null keeps the previous value.
+    if (next != null) {
+      useOpenFilesStore.getState().patchTab(activeTab.id, { activePhaseId: next });
+    }
   }, [activeTab]);
 
   // ── Add a new (empty) phase to the active tab ────────────────────────────
@@ -730,15 +772,27 @@ export default function FileManagerOverlay() {
       push('error', 'A mission must have at least one phase');
       return;
     }
-    if (phaseId === activeTab.activePhaseId) {
-      push('error', 'Switch to another phase before deleting this one');
-      return;
-    }
     const target = activeTab.phases.find((p) => p.id === phaseId);
+    // Drop features tagged with this phase. They're "phase content", not
+    // orphan plan items — losing the phase means losing its plan.
+    const featuresBefore = useDrawnStore.getState().features;
+    const featuresAfter = featuresBefore.filter(
+      (f) => (f.properties as Record<string, unknown> | null)?.phaseId !== phaseId,
+    );
+    if (featuresAfter.length !== featuresBefore.length) {
+      useDrawnStore.getState().setAll(featuresAfter);
+    }
+    // Drop the phase from the tab metadata.
     useOpenFilesStore.getState().patchTab(activeTab.id, {
       phases: activeTab.phases.filter((p) => p.id !== phaseId),
       isDirty: true,
     });
+    // If the deleted phase was selected, fall back to the first remaining.
+    const tactical = useTacticalStore.getState();
+    if (tactical.selectedPhaseId === phaseId) {
+      const next = activeTab.phases.find((p) => p.id !== phaseId);
+      tactical.setSelectedPhaseId(next?.id ?? null);
+    }
     if (target) push('info', `Deleted ${target.name}`);
   }, [activeTab, push]);
 
@@ -752,42 +806,47 @@ export default function FileManagerOverlay() {
   }, [activeTab, push]);
 
   // ── Save active tab to disk ───────────────────────────────────────────────
+  // New model: drawings live in ONE global useDrawnStore, each tagged with a
+  // `phaseId` property. Layers and viewport are also mission-global. Phases
+  // are just metadata (id/name/color/notes) — no per-phase content silos.
   const handleSaveActiveTab = useCallback(async () => {
     if (!activeTab) return;
     setSaving(true);
     try {
-      // Capture current state into the active phase first
       const map = useMapStore.getState().map;
       const live = captureLiveMapState(map);
-      useOpenFilesStore.getState().snapshotIntoTab(activeTab.id, live);
-      const updatedTab = useOpenFilesStore.getState().getTab(activeTab.id);
-      if (!updatedTab) return;
-
-      const activePh = updatedTab.phases.find((p) => p.id === updatedTab.activePhaseId);
       const snapshots: Record<string, FeatureCollection> = {};
-      if (activePh?.layer_snapshots) {
-        for (const [k, v] of Object.entries(activePh.layer_snapshots)) snapshots[k] = v;
-      }
+      for (const [k, v] of Object.entries(live.layerSnapshots)) snapshots[k] = v;
+      // Strip per-phase content fields from each phase before persisting.
+      const phasesMeta = activeTab.phases.map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        notes: p.notes,
+        // Keep these empty for the on-disk schema's sake — they're no longer used.
+        active_layers: [],
+        drawn_features: { type: 'FeatureCollection' as const, features: [] },
+      }));
       await fsSaveFile({
-        id: updatedTab.id,
-        name: updatedTab.name,
-        folder_id: updatedTab.folderId,
-        rank: updatedTab.rank,
-        unit: updatedTab.unit,
-        commander_name: updatedTab.commanderName,
-        parent_file_id: updatedTab.parentFileId,
-        bbox: activePh?.bbox ?? null,
-        center: activePh?.center ?? null,
-        zoom: activePh?.zoom ?? null,
-        timeline_selected_ms: activePh?.timeline_selected_ms ?? null,
-        active_layers: activePh?.active_layers ?? [],
-        drawn_features: activePh?.drawn_features ?? { type: 'FeatureCollection', features: [] },
+        id: activeTab.id,
+        name: activeTab.name,
+        folder_id: activeTab.folderId,
+        rank: activeTab.rank,
+        unit: activeTab.unit,
+        commander_name: activeTab.commanderName,
+        parent_file_id: activeTab.parentFileId,
+        bbox: live.bbox,
+        center: live.center,
+        zoom: live.zoom,
+        timeline_selected_ms: live.timelineSelectedMs,
+        active_layers: live.activeLayers,
+        drawn_features: { type: 'FeatureCollection', features: live.drawnFeatures },
         layer_snapshots: snapshots,
-        phases: updatedTab.phases,
-        current_phase: updatedTab.activePhaseId,
+        phases: phasesMeta,
+        current_phase: useTacticalStore.getState().selectedPhaseId ?? activeTab.activePhaseId,
       });
-      useOpenFilesStore.getState().markClean(updatedTab.id);
-      push('success', `Saved: ${updatedTab.name}`);
+      useOpenFilesStore.getState().markClean(activeTab.id);
+      push('success', `Saved: ${activeTab.name}`);
       refetchAll();
     } catch (e) {
       push('error', `Save failed: ${String(e)}`);
@@ -1149,12 +1208,15 @@ export default function FileManagerOverlay() {
           <div className="mb-1 flex items-center gap-1.5">
             <Layers size={9} className="text-white/30" />
             <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/30">
-              Phases — drawings, layers & symbols are scoped per phase
+              Phases —{' '}
+              {selectedPhaseId == null
+                ? 'view-all (no drawing — pick a phase to edit)'
+                : 'new drawings go to the selected phase · click again to view all'}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1">
             {activeTab.phases.map((ph) => {
-              const isActive = ph.id === activeTab.activePhaseId;
+              const isActive = ph.id === selectedPhaseId;
               const phaseColor = ph.color ?? '#3b82f6';
               const isRenaming = renamingPhaseId === ph.id;
               if (isRenaming) {

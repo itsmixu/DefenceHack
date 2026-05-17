@@ -6,7 +6,7 @@
  *   • Center: PLAN / HISTORY tabs (active gets a white underline)
  *   • Right:  collab session pill (role + peer count + take-over) + EXPORT PDF
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Crown, Eye } from 'lucide-react';
 import { useCollabStore, useToastStore } from '../store';
 import { collabApi } from '../api/collab';
