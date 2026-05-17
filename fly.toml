@@ -1,0 +1,30 @@
+app = "l1nx"
+primary_region = "arn"
+
+[build]
+
+[env]
+  DATA_ROOT = "/data"
+  ENABLE_COLLAB = "false"
+  ALLOWED_ORIGINS = "https://l1nx.mikohur.me"
+
+[[mounts]]
+  source = "l1nx_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"

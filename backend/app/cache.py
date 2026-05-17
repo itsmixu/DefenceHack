@@ -28,8 +28,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-# data/cache lives at repo root, two levels up from backend/app/cache.py
-CACHE_ROOT = Path(__file__).resolve().parents[2] / "data" / "cache"
+from .paths import DATA_ROOT
+
+CACHE_ROOT = DATA_ROOT / "cache"
 
 # Per-namespace disk budgets. Keep terrain-heavy sources generous; everything
 # else stays small. Tune via env if needed later.

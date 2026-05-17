@@ -51,7 +51,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DATA_ROOT   = Path(__file__).resolve().parents[2] / "data"
+from .paths import DATA_ROOT
+
 FS_ROOT     = DATA_ROOT / "filesystem"
 CONTENT_DIR = FS_ROOT / "content"
 INDEX_FILE  = FS_ROOT / "index.json"

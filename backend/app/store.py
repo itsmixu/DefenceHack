@@ -18,7 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DATA_ROOT = Path(__file__).resolve().parents[2] / "data"
+from .paths import DATA_ROOT
+
 PLANS_DIR = DATA_ROOT / "plans"
 VERSIONS_DIR = DATA_ROOT / "plan_versions"
 OPS_DIR = DATA_ROOT / "operations"
